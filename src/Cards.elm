@@ -5,22 +5,37 @@ import Types exposing (..)
 import Words exposing (words)
 
 
-generateWords : Int -> List String -> List String
+generateWords : GridSize -> List String -> List String
 generateWords gridSize wordList =
     case gridSize of
-        5 ->
+        SmallGrid ->
+            shuffleList wordList
+                |> List.Extra.unique
+                |> List.take 16
+
+        MediumGrid ->
             shuffleList wordList
                 |> List.Extra.unique
                 |> List.take 25
 
-        _ ->
-            Debug.todo "Get a list of words"
+        LargeGrid ->
+            shuffleList wordList
+                |> List.Extra.unique
+                |> List.take 36
 
 
-pickTeams : Int -> List Team
+pickTeams : GridSize -> List Team
 pickTeams gridSize =
     case gridSize of
-        5 ->
+        SmallGrid ->
+            -- 16 cards
+            List.repeat 4 Red
+                |> List.append (List.repeat 4 Blue)
+                |> List.append (List.repeat 7 Gray)
+                |> List.append (List.singleton Assassin)
+                |> shuffleList
+
+        MediumGrid ->
             -- 25 cards
             List.repeat 6 Red
                 |> List.append (List.repeat 6 Blue)
@@ -28,8 +43,13 @@ pickTeams gridSize =
                 |> List.append (List.singleton Assassin)
                 |> shuffleList
 
-        _ ->
-            Debug.todo "List of Teams"
+        MediumGrid ->
+            -- 36 cards
+            List.repeat 8 Red
+                |> List.append (List.repeat 8 Blue)
+                |> List.append (List.repeat 15 Gray)
+                |> List.append (List.singleton Assassin)
+                |> shuffleList
 
 
 generateCards : List String -> List Team -> List Card

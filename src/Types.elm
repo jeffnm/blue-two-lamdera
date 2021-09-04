@@ -40,6 +40,12 @@ type alias User =
     }
 
 
+type GridSize
+    = SmallGrid
+    | MediumGrid
+    | LargeGrid
+
+
 type Team
     = Blue
     | Red
