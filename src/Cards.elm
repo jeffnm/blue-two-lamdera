@@ -43,7 +43,7 @@ pickTeams gridSize =
                 |> List.append (List.singleton Assassin)
                 |> shuffleList
 
-        MediumGrid ->
+        LargeGrid ->
             -- 36 cards
             List.repeat 8 Red
                 |> List.append (List.repeat 8 Blue)
