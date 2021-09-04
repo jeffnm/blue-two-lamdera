@@ -28,7 +28,7 @@ app =
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
     ( { key = key
-      , user = ""
+      , user = Nothing
       , activeGame = Nothing
       , newGameSettings = []
       }
@@ -63,6 +63,9 @@ updateFromBackend msg model =
     case msg of
         NoOpToFrontend ->
             ( model, Cmd.none )
+
+        _ ->
+            Debug.todo "Implement other branches"
 
 
 view : Model -> Browser.Document FrontendMsg

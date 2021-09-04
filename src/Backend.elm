@@ -1,6 +1,5 @@
 module Backend exposing (..)
 
-import Html
 import Lamdera exposing (ClientId, SessionId)
 import Types exposing (..)
 
@@ -37,3 +36,6 @@ updateFromFrontend sessionId clientId msg model =
     case msg of
         NoOpToBackend ->
             ( model, Cmd.none )
+
+        _ ->
+            Debug.todo "Implement the other branches"

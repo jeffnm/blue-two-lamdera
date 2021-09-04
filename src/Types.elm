@@ -7,7 +7,7 @@ import Url exposing (Url)
 
 type alias FrontendModel =
     { key : Key
-    , user : String
+    , user : Maybe User
     , activeGame : Maybe Game
     , newGameSettings : List String
     }
@@ -33,6 +33,13 @@ type alias Card =
     }
 
 
+type alias User =
+    { name : String
+    , team : Team
+    , games : List Int
+    }
+
+
 type Team
     = Blue
     | Red
@@ -48,6 +55,13 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
+    | CreateNewGame
+    | JoinGame
+    | LoadGame
+    | GetPublicGames
+    | GetUserGames
+    | ChangeCardRevealedState
+    | ChangeUserTeam
 
 
 type BackendMsg
@@ -56,3 +70,6 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
+    | PublicGames
+    | UserGames
+    | ActiveGame
