@@ -13,6 +13,11 @@ type alias FrontendModel =
     }
 
 
+type alias BackendModel =
+    { games : List Game
+    }
+
+
 type alias Game =
     { id : Int
     , users : List String
@@ -33,11 +38,6 @@ type Team
     | Red
     | Gray
     | Assassin
-
-
-type alias BackendModel =
-    { message : String
-    }
 
 
 type FrontendMsg
