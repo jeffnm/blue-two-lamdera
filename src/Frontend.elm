@@ -28,7 +28,9 @@ app =
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
     ( { key = key
-      , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
+      , user = ""
+      , activeGame = Nothing
+      , newGameSettings = []
       }
     , Cmd.none
     )
@@ -73,7 +75,7 @@ view model =
                 [ Attr.style "font-family" "sans-serif"
                 , Attr.style "padding-top" "40px"
                 ]
-                [ Html.text model.message ]
+                [ Html.text "Welcome" ]
             ]
         ]
     }

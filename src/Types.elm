@@ -7,8 +7,32 @@ import Url exposing (Url)
 
 type alias FrontendModel =
     { key : Key
-    , message : String
+    , user : String
+    , activeGame : Maybe Game
+    , newGameSettings : List String
     }
+
+
+type alias Game =
+    { id : Int
+    , users : List String
+    , public : Bool
+    , cards : List Card
+    }
+
+
+type alias Card =
+    { word : String
+    , team : Team
+    , revealed : Bool
+    }
+
+
+type Team
+    = Blue
+    | Red
+    | Gray
+    | Assassin
 
 
 type alias BackendModel =
