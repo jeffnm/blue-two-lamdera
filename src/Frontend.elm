@@ -79,3 +79,23 @@ view model =
             ]
         ]
     }
+
+
+viewLandingPage : Model -> Html.Html msg
+viewLandingPage model =
+    Debug.todo "Landing Page"
+
+
+viewCreateGameForm : Model -> Html.Html msg
+viewCreateGameForm model =
+    Debug.todo "New game form"
+
+
+viewPublicGames : Model -> Html.Html msg
+viewPublicGames model =
+    Debug.todo "Display public games"
+
+
+viewGame : Model -> Html.Html msg
+viewGame model =
+    Debug.todo "Display active game"
