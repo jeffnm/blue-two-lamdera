@@ -1,62 +1,129 @@
 module Cards exposing (..)
 
-import List.Extra exposing (unique)
+import List.Extra
 import Types exposing (..)
 import Words exposing (words)
 
 
-generateWords : GridSize -> List String -> List String
-generateWords gridSize wordList =
+generateWords : GridSize -> List String
+generateWords gridSize =
     case gridSize of
         SmallGrid ->
-            shuffleList wordList
+            shuffleList words
                 |> List.Extra.unique
                 |> List.take 16
 
         MediumGrid ->
-            shuffleList wordList
+            shuffleList words
                 |> List.Extra.unique
                 |> List.take 25
 
         LargeGrid ->
-            shuffleList wordList
+            shuffleList words
                 |> List.Extra.unique
                 |> List.take 36
 
 
-pickTeams : GridSize -> List Team
-pickTeams gridSize =
+pickTeams : GridSize -> Team -> List CardAlignment
+pickTeams gridSize startingTeam =
     case gridSize of
         SmallGrid ->
             -- 16 cards
-            List.repeat 4 Red
-                |> List.append (List.repeat 4 Blue)
-                |> List.append (List.repeat 7 Gray)
-                |> List.append (List.singleton Assassin)
-                |> shuffleList
+            case startingTeam of
+                Blue ->
+                    List.repeat 4 RedCard
+                        |> List.append (List.repeat 5 BlueCard)
+                        |> List.append (List.repeat 6 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
+
+                Red ->
+                    List.repeat 5 RedCard
+                        |> List.append (List.repeat 4 BlueCard)
+                        |> List.append (List.repeat 6 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
 
         MediumGrid ->
             -- 25 cards
-            List.repeat 6 Red
-                |> List.append (List.repeat 6 Blue)
-                |> List.append (List.repeat 12 Gray)
-                |> List.append (List.singleton Assassin)
-                |> shuffleList
+            case startingTeam of
+                Blue ->
+                    List.repeat 6 RedCard
+                        |> List.append (List.repeat 7 BlueCard)
+                        |> List.append (List.repeat 11 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
+
+                Red ->
+                    List.repeat 7 RedCard
+                        |> List.append (List.repeat 6 BlueCard)
+                        |> List.append (List.repeat 11 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
 
         LargeGrid ->
             -- 36 cards
-            List.repeat 8 Red
-                |> List.append (List.repeat 8 Blue)
-                |> List.append (List.repeat 15 Gray)
-                |> List.append (List.singleton Assassin)
-                |> shuffleList
+            case startingTeam of
+                Blue ->
+                    List.repeat 8 RedCard
+                        |> List.append (List.repeat 9 BlueCard)
+                        |> List.append (List.repeat 14 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
+
+                Red ->
+                    List.repeat 9 RedCard
+                        |> List.append (List.repeat 8 BlueCard)
+                        |> List.append (List.repeat 14 Gray)
+                        |> List.append (List.singleton Assassin)
+                        |> shuffleList
 
 
-generateCards : List String -> List Team -> List Card
-generateCards wordList teamsList =
-    List.map2 (\w t -> Card w t False) wordList teamsList
+cardCardAlignmentToString : CardAlignment -> String
+cardCardAlignmentToString team =
+    case team of
+        BlueCard ->
+            "blue"
+
+        RedCard ->
+            "red"
+
+        Gray ->
+            "lightgray"
+
+        Assassin ->
+            "black"
+
+
+updateCard : Card -> List Card -> List Card
+updateCard card cardList =
+    List.map
+        (\c ->
+            if c.word == card.word then
+                card
+
+            else
+                c
+        )
+        cardList
+
+
+revealAllCards : List Card -> List Card
+revealAllCards cardList =
+    List.map (\c -> { c | revealed = True }) cardList
+
+
+hideAllCards : List Card -> List Card
+hideAllCards cardList =
+    List.map (\c -> { c | revealed = False }) cardList
+
+
+generateCards : GridSize -> Team -> List Card
+generateCards gridSize startingTeam =
+    List.map2 (\w t -> Card w t False) (generateWords gridSize) (pickTeams gridSize startingTeam)
 
 
 shuffleList : List a -> List a
 shuffleList list_a =
-    Debug.todo "figure out how to shuffle stuff"
+    -- Debug.todo "figure out how to shuffle stuff"
+    list_a

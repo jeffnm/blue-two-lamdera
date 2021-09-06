@@ -1,6 +1,7 @@
 module Backend exposing (..)
 
-import Lamdera exposing (ClientId, SessionId)
+import Cards exposing (generateCards, updateCard)
+import Lamdera exposing (ClientId, SessionId, clientConnected_, sendToBackend, sendToFrontend)
 import Types exposing (..)
 
 
@@ -37,5 +38,157 @@ updateFromFrontend sessionId clientId msg model =
         NoOpToBackend ->
             ( model, Cmd.none )
 
+        CreateNewGame newGameSettings ->
+            let
+                game =
+                    generateGame model newGameSettings clientId
+            in
+            ( { model | games = model.games ++ [ game ] }, sendToFrontend clientId (ActiveGame game) )
+
+        GetPublicGames ->
+            ( model, sendToFrontend clientId (PublicGames (List.filter (\g -> g.public) model.games)) )
+
+        JoinGame id ->
+            -- Join the user to the game
+            case joinGame id clientId model.games of
+                Nothing ->
+                    Debug.todo "Send error in joining game to the front"
+
+                Just games ->
+                    -- Find the game you just joined
+                    case findGame id games of
+                        Nothing ->
+                            Debug.todo "somethimg with this branch - can we avoid it?"
+
+                        Just game ->
+                            let
+                                activeGame =
+                                    game
+                            in
+                            --update the games in the model and let the joiner load the game
+                            ( { model | games = games }, sendToFrontend clientId (ActiveGame activeGame) )
+
+        ChangeCardRevealedState card game ->
+            let
+                newGame =
+                    updateGameCards card game
+                        |> updateGame model.games
+            in
+            ( { model
+                | games = newGame
+              }
+            , sendUpdatedGameToPlayers game.id newGame
+            )
+
+        EndTurn game newturn ->
+            let
+                newGame =
+                    updateGameStatus newturn game
+                        |> updateGame model.games
+            in
+            ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
+
+        EndGame team game ->
+            let
+                newGame =
+                    updateGameStatus (getGameStatusFromWinningTeam team) game
+                        |> updateGame model.games
+            in
+            case team of
+                Blue ->
+                    ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
+
+                Red ->
+                    ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
+
+        -- Debug.todo "There needs to be a way to let all game.users know the game has changed"
         _ ->
             Debug.todo "Implement the other branches"
+
+
+generateGame : Model -> NewGameSettings -> ClientId -> Game
+generateGame model settings clientId =
+    let
+        newId =
+            List.length model.games + 1
+
+        status =
+            getGameStatusFromStartingTeam settings.startingTeam
+    in
+    Game newId [ clientId ] settings.public (generateCards settings.gridSize settings.startingTeam) status
+
+
+joinGame : Int -> String -> List Game -> Maybe (List Game)
+joinGame id clientId games =
+    case findGame id games of
+        Nothing ->
+            Nothing
+
+        Just game ->
+            addUserToGame clientId game
+                |> updateGame games
+                |> Just
+
+
+findGame : Int -> List Game -> Maybe Game
+findGame id games =
+    List.filter (\g -> g.id == id) games
+        |> List.head
+
+
+addUserToGame : String -> Game -> Game
+addUserToGame user game =
+    { game | users = game.users ++ [ user ] }
+
+
+updateGame : List Game -> Game -> List Game
+updateGame games newgame =
+    List.map
+        (\g ->
+            if g.id == newgame.id then
+                newgame
+
+            else
+                g
+        )
+        games
+
+
+updateGameCards : Card -> Game -> Game
+updateGameCards card game =
+    { game | cards = updateCard card game.cards }
+
+
+updateGameStatus : GameStatus -> Game -> Game
+updateGameStatus status game =
+    { game | gameStatus = status }
+
+
+sendUpdatedGameToPlayers : Int -> List Game -> Cmd msg
+sendUpdatedGameToPlayers gameId games =
+    case findGame gameId games of
+        Nothing ->
+            Cmd.none
+
+        Just game ->
+            Cmd.batch <| List.map (\u -> sendToFrontend u (ActiveGame game)) game.users
+
+
+getGameStatusFromStartingTeam : Team -> GameStatus
+getGameStatusFromStartingTeam startingTeam =
+    case startingTeam of
+        Blue ->
+            BlueTurn
+
+        _ ->
+            RedTurn
+
+
+getGameStatusFromWinningTeam : Team -> GameStatus
+getGameStatusFromWinningTeam winningTeam =
+    case winningTeam of
+        Blue ->
+            BlueWon
+
+        Red ->
+            RedWon

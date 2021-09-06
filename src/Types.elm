@@ -2,6 +2,7 @@ module Types exposing (..)
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation exposing (Key)
+import Lamdera exposing (ClientId, SessionId)
 import Url exposing (Url)
 
 
@@ -9,7 +10,9 @@ type alias FrontendModel =
     { key : Key
     , user : Maybe User
     , activeGame : Maybe Game
-    , newGameSettings : List String
+    , newGameSettings : NewGameSettings
+    , newUserSettings : NewUserSettings
+    , publicGames : List Game
     }
 
 
@@ -23,12 +26,26 @@ type alias Game =
     , users : List String
     , public : Bool
     , cards : List Card
+    , gameStatus : GameStatus
+    }
+
+
+type alias NewUserSettings =
+    { username : String
+    , team : Team
+    }
+
+
+type alias NewGameSettings =
+    { public : Bool
+    , gridSize : GridSize
+    , startingTeam : Team
     }
 
 
 type alias Card =
     { word : String
-    , team : Team
+    , team : CardAlignment
     , revealed : Bool
     }
 
@@ -36,7 +53,8 @@ type alias Card =
 type alias User =
     { name : String
     , team : Team
-    , games : List Int
+    , cluegiver : Bool
+    , games : List Game
     }
 
 
@@ -49,25 +67,50 @@ type GridSize
 type Team
     = Blue
     | Red
+
+
+type CardAlignment
+    = BlueCard
+    | RedCard
     | Gray
     | Assassin
+
+
+type GameStatus
+    = RedWon
+    | BlueWon
+    | RedTurn
+    | BlueTurn
 
 
 type FrontendMsg
     = UrlClicked UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
+    | NewUser
+    | ChangeNewUserSettingUsername String
+    | ChangeNewUserSettingTeam String
+    | CreatingNewGame
+    | LeavingGame
+    | LoadingGame
+    | JoiningGame Int
+    | ToggleNewGameSettingPublic Bool
+    | ChangeNewGameSettingGridSize String
+    | RevealingCard Card
+    | EndingTurn
 
 
 type ToBackend
     = NoOpToBackend
-    | CreateNewGame
-    | JoinGame
-    | LoadGame
+    | CreateNewGame NewGameSettings
+    | JoinGame Int
+    | LoadGame Game
     | GetPublicGames
     | GetUserGames
-    | ChangeCardRevealedState
+    | ChangeCardRevealedState Card Game
+    | EndTurn Game GameStatus
     | ChangeUserTeam
+    | EndGame Team Game
 
 
 type BackendMsg
@@ -76,6 +119,6 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | PublicGames
+    | PublicGames (List Game)
     | UserGames
-    | ActiveGame
+    | ActiveGame Game
