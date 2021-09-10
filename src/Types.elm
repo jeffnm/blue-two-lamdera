@@ -18,15 +18,19 @@ type alias FrontendModel =
 
 type alias BackendModel =
     { games : List Game
+    , words : List String
     }
 
 
 type alias Game =
     { id : Int
     , users : List String
+    , gridSize : GridSize
     , public : Bool
     , cards : List Card
     , gameStatus : GameStatus
+    , words : List String
+    , cardAlignments : List CardAlignment
     }
 
 
@@ -115,6 +119,9 @@ type ToBackend
 
 type BackendMsg
     = NoOpBackendMsg
+    | ShuffledWords (List String)
+    | ShuffledCardTeams (List CardAlignment)
+    | SendGameToPlayers Int
 
 
 type ToFrontend

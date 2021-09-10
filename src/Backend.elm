@@ -1,8 +1,10 @@
 module Backend exposing (..)
 
-import Cards exposing (generateCards, updateCard)
+import Cards exposing (generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
 import Lamdera exposing (ClientId, SessionId, clientConnected_, sendToBackend, sendToFrontend)
+import Random
 import Types exposing (..)
+import Words exposing (words)
 
 
 type alias Model =
@@ -20,8 +22,10 @@ app =
 
 init : ( Model, Cmd BackendMsg )
 init =
-    ( { games = [] }
-    , Cmd.none
+    ( { games = []
+      , words = words
+      }
+    , shuffleWords words
     )
 
 
@@ -30,6 +34,28 @@ update msg model =
     case msg of
         NoOpBackendMsg ->
             ( model, Cmd.none )
+
+        ShuffledWords words ->
+            ( { model | words = words }, Cmd.none )
+
+        ShuffledCardTeams teams ->
+            let
+                newGame =
+                    findGame (List.length model.games) model.games
+            in
+            case newGame of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just game ->
+                    let
+                        updatedGame =
+                            updateGame model.games (replaceGameCards (generateCards (generateWords (List.length teams) model.words) teams) game)
+                    in
+                    ( { model | games = updatedGame }, Cmd.batch [ shuffleWords model.words, sendUpdatedGameToPlayers game.id updatedGame ] )
+
+        SendGameToPlayers id ->
+            ( model, sendUpdatedGameToPlayers id model.games )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> Model -> ( Model, Cmd BackendMsg )
@@ -42,8 +68,11 @@ updateFromFrontend sessionId clientId msg model =
             let
                 game =
                     generateGame model newGameSettings clientId
+
+                teams =
+                    pickTeams newGameSettings.gridSize newGameSettings.startingTeam
             in
-            ( { model | games = model.games ++ [ game ] }, sendToFrontend clientId (ActiveGame game) )
+            ( { model | games = model.games ++ [ game ] }, shuffleCardAlignments teams )
 
         GetPublicGames ->
             ( model, sendToFrontend clientId (PublicGames (List.filter (\g -> g.public) model.games)) )
@@ -71,7 +100,7 @@ updateFromFrontend sessionId clientId msg model =
         ChangeCardRevealedState card game ->
             let
                 newGame =
-                    updateGameCards card game
+                    updateGameCard card game
                         |> updateGame model.games
             in
             ( { model
@@ -115,7 +144,11 @@ generateGame model settings clientId =
         status =
             getGameStatusFromStartingTeam settings.startingTeam
     in
-    Game newId [ clientId ] settings.public (generateCards settings.gridSize settings.startingTeam) status
+    Game newId [ clientId ] settings.gridSize settings.public [] status [] []
+
+
+
+-- (generateCards settings.gridSize settings.startingTeam)
 
 
 joinGame : Int -> String -> List Game -> Maybe (List Game)
@@ -154,9 +187,14 @@ updateGame games newgame =
         games
 
 
-updateGameCards : Card -> Game -> Game
-updateGameCards card game =
+updateGameCard : Card -> Game -> Game
+updateGameCard card game =
     { game | cards = updateCard card game.cards }
+
+
+replaceGameCards : List Card -> Game -> Game
+replaceGameCards cards game =
+    { game | cards = cards }
 
 
 updateGameStatus : GameStatus -> Game -> Game

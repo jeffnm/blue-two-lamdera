@@ -1,27 +1,16 @@
 module Cards exposing (..)
 
 import List.Extra
+import Random
+import Random.List
 import Types exposing (..)
-import Words exposing (words)
 
 
-generateWords : GridSize -> List String
-generateWords gridSize =
-    case gridSize of
-        SmallGrid ->
-            shuffleList words
-                |> List.Extra.unique
-                |> List.take 16
-
-        MediumGrid ->
-            shuffleList words
-                |> List.Extra.unique
-                |> List.take 25
-
-        LargeGrid ->
-            shuffleList words
-                |> List.Extra.unique
-                |> List.take 36
+generateWords : Int -> List String -> List String
+generateWords gridSize words =
+    words
+        |> List.Extra.unique
+        |> List.take gridSize
 
 
 pickTeams : GridSize -> Team -> List CardAlignment
@@ -35,14 +24,12 @@ pickTeams gridSize startingTeam =
                         |> List.append (List.repeat 5 BlueCard)
                         |> List.append (List.repeat 6 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
                 Red ->
                     List.repeat 5 RedCard
                         |> List.append (List.repeat 4 BlueCard)
                         |> List.append (List.repeat 6 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
         MediumGrid ->
             -- 25 cards
@@ -52,14 +39,12 @@ pickTeams gridSize startingTeam =
                         |> List.append (List.repeat 7 BlueCard)
                         |> List.append (List.repeat 11 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
                 Red ->
                     List.repeat 7 RedCard
                         |> List.append (List.repeat 6 BlueCard)
                         |> List.append (List.repeat 11 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
         LargeGrid ->
             -- 36 cards
@@ -69,14 +54,12 @@ pickTeams gridSize startingTeam =
                         |> List.append (List.repeat 9 BlueCard)
                         |> List.append (List.repeat 14 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
                 Red ->
                     List.repeat 9 RedCard
                         |> List.append (List.repeat 8 BlueCard)
                         |> List.append (List.repeat 14 Gray)
                         |> List.append (List.singleton Assassin)
-                        |> shuffleList
 
 
 cardCardAlignmentToString : CardAlignment -> String
@@ -118,12 +101,18 @@ hideAllCards cardList =
     List.map (\c -> { c | revealed = False }) cardList
 
 
-generateCards : GridSize -> Team -> List Card
-generateCards gridSize startingTeam =
-    List.map2 (\w t -> Card w t False) (generateWords gridSize) (pickTeams gridSize startingTeam)
+generateCards : List String -> List CardAlignment -> List Card
+generateCards words teams =
+    List.map2 (\w t -> Card w t False) words teams
 
 
-shuffleList : List a -> List a
-shuffleList list_a =
+shuffleWords : List String -> Cmd BackendMsg
+shuffleWords words =
     -- Debug.todo "figure out how to shuffle stuff"
-    list_a
+    Random.generate ShuffledWords (Random.List.shuffle words)
+
+
+shuffleCardAlignments : List CardAlignment -> Cmd BackendMsg
+shuffleCardAlignments teams =
+    -- Debug.todo "figure out how to shuffle stuff"
+    Random.generate ShuffledCardTeams (Random.List.shuffle teams)
