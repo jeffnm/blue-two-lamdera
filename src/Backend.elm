@@ -81,13 +81,15 @@ updateFromFrontend sessionId clientId msg model =
             -- Join the user to the game
             case joinGame id clientId model.games of
                 Nothing ->
-                    Debug.todo "Send error in joining game to the front"
+                    -- Debug.todo "Send error in joining game to the front"
+                    ( model, Cmd.none )
 
                 Just games ->
                     -- Find the game you just joined
                     case findGame id games of
                         Nothing ->
-                            Debug.todo "somethimg with this branch - can we avoid it?"
+                            -- Debug.todo "somethimg with this branch - can we avoid it?"
+                            ( model, Cmd.none )
 
                         Just game ->
                             let
@@ -132,7 +134,8 @@ updateFromFrontend sessionId clientId msg model =
 
         -- Debug.todo "There needs to be a way to let all game.users know the game has changed"
         _ ->
-            Debug.todo "Implement the other branches"
+            -- Debug.todo "Implement the other branches"
+            ( model, Cmd.none )
 
 
 generateGame : Model -> NewGameSettings -> ClientId -> Game

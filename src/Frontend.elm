@@ -132,7 +132,8 @@ update msg model =
             ( { model | newUserSettings = setNewUserSettingUsername model.newUserSettings username }, Cmd.none )
 
         _ ->
-            Debug.todo "Finish FrontendMsg updates"
+            -- Debug.todo "Finish FrontendMsg updates"
+            ( model, Cmd.none )
 
 
 updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
@@ -148,7 +149,8 @@ updateFromBackend msg model =
             ( { model | publicGames = publicGames }, Cmd.none )
 
         _ ->
-            Debug.todo "Implement other branches"
+            -- Debug.todo "Implement other branches"
+            ( model, Cmd.none )
 
 
 teamFromString : String -> Team
