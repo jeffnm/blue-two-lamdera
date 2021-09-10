@@ -7,10 +7,10 @@ import Types exposing (..)
 
 
 generateWords : Int -> List String -> List String
-generateWords gridSize words =
+generateWords numberOfWords words =
     words
         |> List.Extra.unique
-        |> List.take gridSize
+        |> List.take numberOfWords
 
 
 pickTeams : GridSize -> Team -> List CardAlignment
