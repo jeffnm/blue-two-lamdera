@@ -127,6 +127,14 @@ update msg model =
                 Just user ->
                     ( { model | user = Just (toggleClueGiver user (not user.cluegiver)) }, Cmd.none )
 
+        ToggleTeam ->
+            case model.user of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just user ->
+                    ( { model | user = Just (toggleTeam user) }, Cmd.none )
+
         ToggleNewGameSettingPublic value ->
             ( { model | newGameSettings = toggleNewGameSettingPublic model.newGameSettings value }, Cmd.none )
 
@@ -213,6 +221,18 @@ toggleNewGameSettingPublic oldSettings public =
 toggleClueGiver : User -> Bool -> User
 toggleClueGiver olduser cluegiver =
     { olduser | cluegiver = cluegiver }
+
+
+toggleTeam : User -> User
+toggleTeam user =
+    { user
+        | team =
+            if user.team == Red then
+                Blue
+
+            else
+                Red
+    }
 
 
 setNewGameSettingGridSize : NewGameSettings -> String -> NewGameSettings
@@ -448,13 +468,22 @@ viewGameHeader game user =
         ]
 
 
-viewClueGiverToggle : Game -> User -> Html.Html FrontendMsg
-viewClueGiverToggle game user =
+viewClueGiverToggleButton : User -> Html.Html FrontendMsg
+viewClueGiverToggleButton user =
     if user.cluegiver then
         Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Stop being clue giver" ]
 
     else
         Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Become clue giver" ]
+
+
+viewTeamToggleButton : User -> Html.Html FrontendMsg
+viewTeamToggleButton user =
+    if user.team == Red then
+        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Blue team" ]
+
+    else
+        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Red team" ]
 
 
 viewBlue : Game -> Html.Html FrontendMsg
@@ -510,15 +539,17 @@ viewTurn game user =
         RedTurn ->
             Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "red" ] [ Html.text "It's Red's turn." ]
-                , endTurnButton
-                , viewClueGiverToggle game user
+                , Html.div [] [ endTurnButton ]
+                , Html.div [] [ viewClueGiverToggleButton user ]
+                , Html.div [] [ viewTeamToggleButton user ]
                 ]
 
         BlueTurn ->
             Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "blue" ] [ Html.text "It's Blue's turn." ]
                 , Html.div [] [ endTurnButton ]
-                , Html.div [] [ viewClueGiverToggle game user ]
+                , Html.div [] [ viewClueGiverToggleButton user ]
+                , Html.div [] [ viewTeamToggleButton user ]
                 ]
 
 

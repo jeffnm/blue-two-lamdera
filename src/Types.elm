@@ -103,6 +103,7 @@ type FrontendMsg
     | RevealingCard Card
     | EndingTurn
     | ToggleClueGiverStatus
+    | ToggleTeam
 
 
 type ToBackend
