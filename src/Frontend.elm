@@ -4,7 +4,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Cards exposing (cardCardAlignmentToString)
 import Html exposing (Html)
-import Html.Attributes as Attr
+import Html.Attributes as Attr exposing (name)
 import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
 import Lamdera exposing (sendToBackend)
 import Types exposing (..)
@@ -119,6 +119,14 @@ update msg model =
                         _ ->
                             ( model, Cmd.none )
 
+        ToggleClueGiverStatus ->
+            case model.user of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just user ->
+                    ( { model | user = Just (toggleClueGiver user (not user.cluegiver)) }, Cmd.none )
+
         ToggleNewGameSettingPublic value ->
             ( { model | newGameSettings = toggleNewGameSettingPublic model.newGameSettings value }, Cmd.none )
 
@@ -202,6 +210,11 @@ toggleNewGameSettingPublic oldSettings public =
     { oldSettings | public = public }
 
 
+toggleClueGiver : User -> Bool -> User
+toggleClueGiver olduser cluegiver =
+    { olduser | cluegiver = cluegiver }
+
+
 setNewGameSettingGridSize : NewGameSettings -> String -> NewGameSettings
 setNewGameSettingGridSize oldSettings gridSize =
     { oldSettings | gridSize = gridSizeFromString gridSize }
@@ -246,6 +259,46 @@ gridSizeToString gridsize =
             "Large"
 
 
+getScore : Game -> Team -> String
+getScore game team =
+    case team of
+        Red ->
+            let
+                red =
+                    List.filter (\c -> c.team == RedCard) game.cards
+                        |> List.filter (\c -> c.revealed)
+                        |> List.length
+                        |> String.fromInt
+
+                redTotal =
+                    List.filter (\c -> c.team == RedCard) game.cards
+                        |> List.length
+                        |> String.fromInt
+            in
+            "Red: " ++ red ++ " / " ++ redTotal
+
+        Blue ->
+            let
+                blue =
+                    List.filter (\c -> c.team == BlueCard) game.cards
+                        |> List.filter (\c -> c.revealed)
+                        |> List.length
+                        |> String.fromInt
+
+                blueTotal =
+                    List.filter (\c -> c.team == BlueCard) game.cards
+                        |> List.length
+                        |> String.fromInt
+            in
+            "Blue: " ++ blue ++ " / " ++ blueTotal
+
+
+getPlayers : Game -> Team -> List String
+getPlayers game team =
+    -- List.filter (\p -> p.team == team) game.users
+    game.users
+
+
 view : Model -> Browser.Document FrontendMsg
 view model =
     { title = ""
@@ -282,19 +335,17 @@ viewLandingPage model =
     Html.div []
         [ Html.div [] [ Html.text "Welcome" ]
         , Html.div []
-            [ Html.form [ onSubmit NewUser ]
-                [ Html.div []
-                    [ Html.label [ Attr.for "username" ] [ Html.text "Username" ]
-                    , Html.input [ Attr.id "username", onInput ChangeNewUserSettingUsername, Attr.value model.newUserSettings.username ] []
-                    ]
-                , Html.div []
-                    [ Html.label [ Attr.for "team" ] [ Html.text "Team" ]
-                    , Html.select [ Attr.id "team", Attr.value (teamToString model.newUserSettings.team), onInput ChangeNewUserSettingTeam ]
+            [ Html.form [ Attr.style "display" "inline", onSubmit NewUser ]
+                [ Html.fieldset []
+                    [ Html.label [ Attr.style "margin" "2px", Attr.for "username" ] [ Html.text "Username" ]
+                    , Html.input [ Attr.style "margin" "2px", Attr.id "username", onInput ChangeNewUserSettingUsername, Attr.value model.newUserSettings.username ] []
+                    , Html.label [ Attr.style "margin" "2px", Attr.for "team" ] [ Html.text "Team" ]
+                    , Html.select [ Attr.style "margin" "2px", Attr.id "team", Attr.value (teamToString model.newUserSettings.team), onInput ChangeNewUserSettingTeam ]
                         [ Html.option [ Attr.value "Blue" ] [ Html.text "Blue" ]
                         , Html.option [ Attr.value "Red" ] [ Html.text "Red" ]
                         ]
+                    , Html.button [ Attr.style "margin" "2px", Attr.type_ "submit" ] [ Html.text "Start" ]
                     ]
-                , Html.button [ Attr.type_ "submit" ] [ Html.text "Start" ]
                 ]
             ]
         ]
@@ -339,99 +390,135 @@ viewPublicGames model =
 viewGame : Game -> User -> Html.Html FrontendMsg
 viewGame game user =
     let
-        gameBoardWrapper =
-            Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "flex-wrap" "wrap", Attr.style "margin" "auto auto" ]
+        endScore =
+            [ Html.div [] [ Html.text (getScore game Blue) ]
+            , Html.div [] [ Html.text (getScore game Red) ]
+            ]
 
         gameOver =
+            endScore
+                ++ [ viewGameBoardWrapper (viewCardsGameOver game.cards) ]
+    in
+    case game.gameStatus of
+        RedWon ->
             Html.div []
-                [ viewScore game
-                , gameBoardWrapper (viewCardsGameOver game.cards)
-                ]
+                ([ Html.div [] [ Html.text "Red won!" ] ]
+                    ++ gameOver
+                )
 
-        usersTurn =
-            isItUsersTurn user.team game.gameStatus
+        BlueWon ->
+            Html.div []
+                ([ Html.div [] [ Html.text "Blue won!" ] ]
+                    ++ gameOver
+                )
 
-        endTurn =
-            if usersTurn then
+        RedTurn ->
+            viewGamePlaying game user
+
+        BlueTurn ->
+            viewGamePlaying game user
+
+
+viewGameBoardWrapper : List (Html msg) -> Html msg
+viewGameBoardWrapper =
+    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "flex-wrap" "wrap", Attr.style "margin" "auto auto" ]
+
+
+viewGamePlaying : Game -> User -> Html.Html FrontendMsg
+viewGamePlaying game user =
+    if user.cluegiver then
+        Html.div []
+            [ viewGameHeader game user
+            , viewGameBoardWrapper (viewCardsClueGiver game.cards)
+            ]
+
+    else
+        Html.div []
+            [ viewGameHeader game user
+            , viewGameBoardWrapper (viewCardsPlaying game.cards (isItUsersTurn user.team game.gameStatus))
+            ]
+
+
+viewGameHeader : Game -> User -> Html.Html FrontendMsg
+viewGameHeader game user =
+    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "margin" "auto", Attr.style "margin-bottom" "1em" ]
+        [ viewBlue game
+        , viewTurn game user
+        , viewRed game
+        ]
+
+
+viewClueGiverToggle : Game -> User -> Html.Html FrontendMsg
+viewClueGiverToggle game user =
+    if user.cluegiver then
+        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Stop being clue giver" ]
+
+    else
+        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Become clue giver" ]
+
+
+viewBlue : Game -> Html.Html FrontendMsg
+viewBlue game =
+    let
+        score =
+            Html.div [] [ Html.text (getScore game Blue) ]
+
+        players =
+            Html.div [] (List.map (\p -> Html.div [] [ Html.text p ]) (getPlayers game Blue))
+    in
+    Html.div [ Attr.style "justify-content" "flex-start" ] [ score, players ]
+
+
+viewRed : Game -> Html.Html FrontendMsg
+viewRed game =
+    let
+        score =
+            Html.div [] [ Html.text (getScore game Red) ]
+
+        players =
+            Html.div [] (List.map (\p -> Html.div [] [ Html.text p ]) (getPlayers game Red))
+    in
+    Html.div [ Attr.style "justify-content" "flex-end" ] [ score, players ]
+
+
+viewTurn : Game -> User -> Html.Html FrontendMsg
+viewTurn game user =
+    let
+        endTurnButton =
+            if isItUsersTurn user.team game.gameStatus then
                 Html.button [ onClick EndingTurn ] [ Html.text "End Turn" ]
 
             else
                 Html.button [ Attr.disabled True ] [ Html.text "End Turn" ]
 
-        gamePlaying =
-            Html.div []
-                [ viewScore game
-                , endTurn
-                , gameBoardWrapper (viewCardsPlaying game.cards usersTurn)
-                ]
-    in
-    case game.gameStatus of
-        RedWon ->
-            gameOver
-
-        BlueWon ->
-            gameOver
-
-        RedTurn ->
-            gamePlaying
-
-        BlueTurn ->
-            gamePlaying
-
-
-viewScore : Game -> Html.Html FrontendMsg
-viewScore game =
-    let
-        red =
-            List.filter (\c -> c.team == RedCard) game.cards
-                |> List.filter (\c -> c.revealed)
-                |> List.length
-                |> String.fromInt
-
-        redTotal =
-            List.filter (\c -> c.team == RedCard) game.cards
-                |> List.length
-                |> String.fromInt
-
-        blue =
-            List.filter (\c -> c.team == BlueCard) game.cards
-                |> List.filter (\c -> c.revealed)
-                |> List.length
-                |> String.fromInt
-
-        blueTotal =
-            List.filter (\c -> c.team == BlueCard) game.cards
-                |> List.length
-                |> String.fromInt
-
-        score =
-            [ Html.div [] [ Html.text ("Blue: " ++ blue ++ " / " ++ blueTotal) ]
-            , Html.div [] [ Html.text ("Red: " ++ red ++ " / " ++ redTotal) ]
+        controlAttrs =
+            [ Attr.style "justify-content" "center"
+            , Attr.style "margin" "auto"
             ]
     in
     case game.gameStatus of
         RedWon ->
-            Html.div []
+            Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "red" ] [ Html.text "Red Won!" ]
-                , Html.div [] score
                 ]
 
         BlueWon ->
-            Html.div []
+            Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "blue" ] [ Html.text "Blue Won!" ]
-                , Html.div [] score
                 ]
 
         RedTurn ->
-            Html.div []
+            Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "red" ] [ Html.text "It's Red's turn." ]
-                , Html.div [] score
+                , endTurnButton
+                , viewClueGiverToggle game user
                 ]
 
         BlueTurn ->
-            Html.div []
+            Html.div controlAttrs
                 [ Html.div [ Attr.style "color" "blue" ] [ Html.text "It's Blue's turn." ]
-                , Html.div [] score
+                , Html.div [] [ endTurnButton ]
+                , Html.div [] [ viewClueGiverToggle game user ]
                 ]
 
 
@@ -467,6 +554,27 @@ viewCardAttributes card clickable =
 
 viewCardsGameOver : List Card -> List (Html.Html FrontendMsg)
 viewCardsGameOver cardList =
+    let
+        cardAttr =
+            [ Attr.style "width" "10%"
+            , Attr.style "flex-grow" "5"
+            , Attr.style "padding" "3.5%"
+            , Attr.style "margin" "1%"
+            , Attr.style "border" "solid black 1px"
+            , Attr.style "border-radius" "5px"
+            ]
+    in
+    List.map
+        (\c ->
+            Html.div
+                (cardAttr ++ viewCardColor c)
+                [ Html.text c.word ]
+        )
+        cardList
+
+
+viewCardsClueGiver : List Card -> List (Html.Html FrontendMsg)
+viewCardsClueGiver cardList =
     let
         cardAttr =
             [ Attr.style "width" "10%"

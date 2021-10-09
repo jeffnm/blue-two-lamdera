@@ -102,6 +102,7 @@ type FrontendMsg
     | ChangeNewGameSettingGridSize String
     | RevealingCard Card
     | EndingTurn
+    | ToggleClueGiverStatus
 
 
 type ToBackend
