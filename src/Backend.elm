@@ -2,9 +2,12 @@ module Backend exposing (..)
 
 import Cards exposing (generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
 import Lamdera exposing (ClientId, SessionId, clientConnected_, sendToBackend, sendToFrontend)
-import Random
 import Types exposing (..)
 import Words exposing (words)
+
+
+
+-- MODEL
 
 
 type alias Model =
@@ -27,6 +30,10 @@ init =
       }
     , shuffleWords words
     )
+
+
+
+-- UPDATE
 
 
 update : BackendMsg -> Model -> ( Model, Cmd BackendMsg )
@@ -136,6 +143,10 @@ updateFromFrontend sessionId clientId msg model =
         _ ->
             -- Debug.todo "Implement the other branches"
             ( model, Cmd.none )
+
+
+
+-- UTILITIES
 
 
 generateGame : Model -> NewGameSettings -> ClientId -> Game

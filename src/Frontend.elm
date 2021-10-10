@@ -11,6 +11,10 @@ import Types exposing (..)
 import Url
 
 
+
+-- MODEL
+
+
 type alias Model =
     FrontendModel
 
@@ -40,6 +44,10 @@ init url key =
       }
     , sendToBackend GetPublicGames
     )
+
+
+
+-- UPDATE
 
 
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
@@ -167,6 +175,10 @@ updateFromBackend msg model =
         _ ->
             -- Debug.todo "Implement other branches"
             ( model, Cmd.none )
+
+
+
+-- UTILITIES
 
 
 teamFromString : String -> Team
@@ -319,6 +331,10 @@ getPlayers game team =
     game.users
 
 
+
+-- VIEW
+
+
 view : Model -> Browser.Document FrontendMsg
 view model =
     { title = ""
@@ -354,20 +370,7 @@ viewLandingPage : Model -> Html.Html FrontendMsg
 viewLandingPage model =
     Html.div []
         [ Html.div [] [ Html.text "Welcome" ]
-        , Html.div []
-            [ Html.form [ Attr.style "display" "inline", onSubmit NewUser ]
-                [ Html.fieldset []
-                    [ Html.label [ Attr.style "margin" "2px", Attr.for "username" ] [ Html.text "Username" ]
-                    , Html.input [ Attr.style "margin" "2px", Attr.id "username", onInput ChangeNewUserSettingUsername, Attr.value model.newUserSettings.username ] []
-                    , Html.label [ Attr.style "margin" "2px", Attr.for "team" ] [ Html.text "Team" ]
-                    , Html.select [ Attr.style "margin" "2px", Attr.id "team", Attr.value (teamToString model.newUserSettings.team), onInput ChangeNewUserSettingTeam ]
-                        [ Html.option [ Attr.value "Blue" ] [ Html.text "Blue" ]
-                        , Html.option [ Attr.value "Red" ] [ Html.text "Red" ]
-                        ]
-                    , Html.button [ Attr.style "margin" "2px", Attr.type_ "submit" ] [ Html.text "Start" ]
-                    ]
-                ]
-            ]
+        , viewCreateUserForm model
         ]
 
 
@@ -379,32 +382,6 @@ viewLobby model =
             , viewPublicGames model
             ]
         ]
-
-
-viewCreateGameForm : Model -> Html.Html FrontendMsg
-viewCreateGameForm model =
-    Html.div []
-        [ Html.form [ onSubmit CreatingNewGame ]
-            [ Html.label [ Attr.for "public" ] [ Html.text "Public?" ]
-            , Html.input [ Attr.type_ "checkbox", Attr.id "public", onCheck ToggleNewGameSettingPublic, Attr.checked model.newGameSettings.public ] []
-            , Html.label [ Attr.for "gridsize" ] [ Html.text "Size of grid:" ]
-            , Html.select [ Attr.id "gridsize", onInput ChangeNewGameSettingGridSize, Attr.value (gridSizeToString model.newGameSettings.gridSize) ]
-                [ Html.option [ Attr.value "Small" ] [ Html.text "Small" ]
-                , Html.option [ Attr.value "Medium" ] [ Html.text "Medium" ]
-                , Html.option [ Attr.value "Large" ] [ Html.text "Large" ]
-                ]
-            , Html.button [ Attr.type_ "submit" ] [ Html.text "Create Game" ]
-            ]
-        ]
-
-
-viewPublicGames : Model -> Html.Html FrontendMsg
-viewPublicGames model =
-    Html.div []
-        (List.map
-            (\g -> Html.div [ onClick (JoiningGame g.id) ] [ Html.text ("Game " ++ String.fromInt g.id) ])
-            model.publicGames
-        )
 
 
 viewGame : Game -> User -> Html.Html FrontendMsg
@@ -422,14 +399,14 @@ viewGame game user =
     case game.gameStatus of
         RedWon ->
             Html.div []
-                ([ Html.div [] [ Html.text "Red won!" ] ]
-                    ++ gameOver
+                (Html.div [] [ Html.text "Red won!" ]
+                    :: gameOver
                 )
 
         BlueWon ->
             Html.div []
-                ([ Html.div [] [ Html.text "Blue won!" ] ]
-                    ++ gameOver
+                (Html.div [] [ Html.text "Blue won!" ]
+                    :: gameOver
                 )
 
         RedTurn ->
@@ -437,6 +414,28 @@ viewGame game user =
 
         BlueTurn ->
             viewGamePlaying game user
+
+
+viewPublicGames : Model -> Html.Html FrontendMsg
+viewPublicGames model =
+    let
+        publicGames =
+            List.filter (\g -> g.gameStatus not RedWon && g.gameStatus not BlueWon) model.publicGames
+    in
+    Html.div []
+        (List.map
+            (\g -> Html.div [ Attr.style "cursor" "pointer", onClick (JoiningGame g.id) ] [ Html.text ("Game " ++ String.fromInt g.id) ])
+            publicGames
+        )
+
+
+viewGameHeader : Game -> User -> Html.Html FrontendMsg
+viewGameHeader game user =
+    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "margin" "auto", Attr.style "margin-bottom" "1em" ]
+        [ viewBlueTeam game
+        , viewTurnAndToggles game user
+        , viewRedTeam game
+        ]
 
 
 viewGameBoardWrapper : List (Html msg) -> Html msg
@@ -459,35 +458,8 @@ viewGamePlaying game user =
             ]
 
 
-viewGameHeader : Game -> User -> Html.Html FrontendMsg
-viewGameHeader game user =
-    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "margin" "auto", Attr.style "margin-bottom" "1em" ]
-        [ viewBlue game
-        , viewTurn game user
-        , viewRed game
-        ]
-
-
-viewClueGiverToggleButton : User -> Html.Html FrontendMsg
-viewClueGiverToggleButton user =
-    if user.cluegiver then
-        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Stop being clue giver" ]
-
-    else
-        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Become clue giver" ]
-
-
-viewTeamToggleButton : User -> Html.Html FrontendMsg
-viewTeamToggleButton user =
-    if user.team == Red then
-        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Blue team" ]
-
-    else
-        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Red team" ]
-
-
-viewBlue : Game -> Html.Html FrontendMsg
-viewBlue game =
+viewBlueTeam : Game -> Html.Html FrontendMsg
+viewBlueTeam game =
     let
         score =
             Html.div [] [ Html.text (getScore game Blue) ]
@@ -498,8 +470,8 @@ viewBlue game =
     Html.div [ Attr.style "justify-content" "flex-start" ] [ score, players ]
 
 
-viewRed : Game -> Html.Html FrontendMsg
-viewRed game =
+viewRedTeam : Game -> Html.Html FrontendMsg
+viewRedTeam game =
     let
         score =
             Html.div [] [ Html.text (getScore game Red) ]
@@ -510,8 +482,8 @@ viewRed game =
     Html.div [ Attr.style "justify-content" "flex-end" ] [ score, players ]
 
 
-viewTurn : Game -> User -> Html.Html FrontendMsg
-viewTurn game user =
+viewTurnAndToggles : Game -> User -> Html.Html FrontendMsg
+viewTurnAndToggles game user =
     let
         endTurnButton =
             if isItUsersTurn user.team game.gameStatus then
@@ -551,6 +523,10 @@ viewTurn game user =
                 , Html.div [] [ viewClueGiverToggleButton user ]
                 , Html.div [] [ viewTeamToggleButton user ]
                 ]
+
+
+
+-- VIEW CARDS
 
 
 viewCardsPlaying : List Card -> Bool -> List (Html.Html FrontendMsg)
@@ -648,3 +624,64 @@ viewCardColor card =
 
         _ ->
             [ cardColorAttr ]
+
+
+
+-- VIEW BUTTONS
+
+
+viewClueGiverToggleButton : User -> Html.Html FrontendMsg
+viewClueGiverToggleButton user =
+    if user.cluegiver then
+        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Stop being clue giver" ]
+
+    else
+        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Become clue giver" ]
+
+
+viewTeamToggleButton : User -> Html.Html FrontendMsg
+viewTeamToggleButton user =
+    if user.team == Red then
+        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Blue team" ]
+
+    else
+        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Red team" ]
+
+
+
+-- VIEW FORMS
+
+
+viewCreateUserForm : Model -> Html.Html FrontendMsg
+viewCreateUserForm model =
+    Html.div []
+        [ Html.form [ Attr.style "display" "inline", onSubmit NewUser ]
+            [ Html.fieldset []
+                [ Html.label [ Attr.style "margin" "2px", Attr.for "username" ] [ Html.text "Username" ]
+                , Html.input [ Attr.style "margin" "2px", Attr.id "username", onInput ChangeNewUserSettingUsername, Attr.value model.newUserSettings.username ] []
+                , Html.label [ Attr.style "margin" "2px", Attr.for "team" ] [ Html.text "Team" ]
+                , Html.select [ Attr.style "margin" "2px", Attr.id "team", Attr.value (teamToString model.newUserSettings.team), onInput ChangeNewUserSettingTeam ]
+                    [ Html.option [ Attr.value "Blue" ] [ Html.text "Blue" ]
+                    , Html.option [ Attr.value "Red" ] [ Html.text "Red" ]
+                    ]
+                , Html.button [ Attr.style "margin" "2px", Attr.type_ "submit" ] [ Html.text "Start" ]
+                ]
+            ]
+        ]
+
+
+viewCreateGameForm : Model -> Html.Html FrontendMsg
+viewCreateGameForm model =
+    Html.div []
+        [ Html.form [ onSubmit CreatingNewGame ]
+            [ Html.label [ Attr.for "public" ] [ Html.text "Public?" ]
+            , Html.input [ Attr.type_ "checkbox", Attr.id "public", onCheck ToggleNewGameSettingPublic, Attr.checked model.newGameSettings.public ] []
+            , Html.label [ Attr.for "gridsize" ] [ Html.text "Size of grid:" ]
+            , Html.select [ Attr.id "gridsize", onInput ChangeNewGameSettingGridSize, Attr.value (gridSizeToString model.newGameSettings.gridSize) ]
+                [ Html.option [ Attr.value "Small" ] [ Html.text "Small" ]
+                , Html.option [ Attr.value "Medium" ] [ Html.text "Medium" ]
+                , Html.option [ Attr.value "Large" ] [ Html.text "Large" ]
+                ]
+            , Html.button [ Attr.type_ "submit" ] [ Html.text "Create Game" ]
+            ]
+        ]
