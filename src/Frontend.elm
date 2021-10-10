@@ -420,11 +420,11 @@ viewPublicGames : Model -> Html.Html FrontendMsg
 viewPublicGames model =
     let
         publicGames =
-            List.filter (\g -> g.gameStatus not RedWon && g.gameStatus not BlueWon) model.publicGames
+            List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
     in
     Html.div []
         (List.map
-            (\g -> Html.div [ Attr.style "cursor" "pointer", onClick (JoiningGame g.id) ] [ Html.text ("Game " ++ String.fromInt g.id) ])
+            (\g -> Html.div [] [ Html.span [] [ Html.text ("Game " ++ String.fromInt g.id) ], Html.button [ Attr.style "cursor" "pointer", onClick (JoiningGame g.id) ] [ Html.text "Join" ] ])
             publicGames
         )
 
