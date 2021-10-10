@@ -110,6 +110,7 @@ updateFromFrontend sessionId clientId msg model =
             let
                 newGame =
                     updateGameCard card game
+                        |> isGameOver
                         |> updateGame model.games
             in
             ( { model
@@ -181,6 +182,35 @@ findGame : Int -> List Game -> Maybe Game
 findGame id games =
     List.filter (\g -> g.id == id) games
         |> List.head
+
+
+isGameOver : Game -> Game
+isGameOver game =
+    if didTeamWin game RedCard then
+        { game | gameStatus = RedWon }
+
+    else if didTeamWin game BlueCard then
+        { game | gameStatus = BlueWon }
+
+    else
+        game
+
+
+didTeamWin : Game -> CardAlignment -> Bool
+didTeamWin game team =
+    let
+        teamscards =
+            List.filter (\c -> c.team == team) game.cards
+
+        revealedcards =
+            List.filter (\c -> c.revealed) teamscards
+                |> List.length
+    in
+    if revealedcards == List.length teamscards then
+        True
+
+    else
+        False
 
 
 addUserToGame : String -> Game -> Game
