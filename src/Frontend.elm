@@ -72,7 +72,7 @@ update msg model =
             ( model, Cmd.none )
 
         NewUser ->
-            ( { model | user = Just (User model.newUserSettings.username model.newUserSettings.team False []) }, Cmd.none )
+            ( { model | user = Just (User model.newUserSettings.username model.newUserSettings.team False []) }, sendToBackend GetPublicGames )
 
         CreatingNewGame ->
             ( model, sendToBackend (CreateNewGame model.newGameSettings) )

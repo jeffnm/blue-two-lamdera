@@ -104,7 +104,7 @@ updateFromFrontend sessionId clientId msg model =
                                     game
                             in
                             --update the games in the model and let the joiner load the game
-                            ( { model | games = games }, sendToFrontend clientId (ActiveGame activeGame) )
+                            ( { model | games = games }, Cmd.batch [ sendUpdatedGameToPlayers activeGame.id games, sendToFrontend clientId (ActiveGame activeGame) ] )
 
         ChangeCardRevealedState card game ->
             let
