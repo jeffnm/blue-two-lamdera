@@ -54,6 +54,10 @@ type alias Card =
     }
 
 
+
+-- TODO: Remove games from user type alias and make users for Game a proper User with the client id in the record.
+
+
 type alias User =
     { name : String
     , team : Team
