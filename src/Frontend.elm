@@ -553,7 +553,7 @@ viewCardAttributes card clickable =
             ]
     in
     if clickable then
-        base ++ [ onClick (RevealingCard card) ]
+        base ++ [ Attr.style "cursor" "pointer", onClick (RevealingCard card) ]
 
     else
         base
