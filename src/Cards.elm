@@ -1,5 +1,6 @@
 module Cards exposing (..)
 
+import Element exposing (Color, rgb)
 import List.Extra
 import Random
 import Random.List
@@ -52,13 +53,13 @@ pickTeams gridSize startingTeam =
                 Blue ->
                     List.repeat 8 RedCard
                         |> List.append (List.repeat 9 BlueCard)
-                        |> List.append (List.repeat 14 Gray)
+                        |> List.append (List.repeat 18 Gray)
                         |> List.append (List.singleton Assassin)
 
                 Red ->
                     List.repeat 9 RedCard
                         |> List.append (List.repeat 8 BlueCard)
-                        |> List.append (List.repeat 14 Gray)
+                        |> List.append (List.repeat 18 Gray)
                         |> List.append (List.singleton Assassin)
 
 
@@ -76,6 +77,22 @@ cardCardAlignmentToString team =
 
         Assassin ->
             "black"
+
+
+cardCardAlignmentToRgb : CardAlignment -> Color
+cardCardAlignmentToRgb team =
+    case team of
+        BlueCard ->
+            rgb 0 0 1
+
+        RedCard ->
+            rgb 1 0 0
+
+        Gray ->
+            rgb 0.8 0.8 0.8
+
+        Assassin ->
+            rgb 0 0 0
 
 
 updateCard : Card -> List Card -> List Card

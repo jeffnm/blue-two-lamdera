@@ -1,11 +1,20 @@
 module Frontend exposing (..)
 
+-- import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
+
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
-import Cards exposing (cardCardAlignmentToString)
+import Cards exposing (cardCardAlignmentToRgb, cardCardAlignmentToString)
+import Element as Element exposing (Element, centerX, column, el, paddingEach, rgb, row, text)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Events as Events exposing (onClick)
+import Element.Font as Font
+import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes as Attr exposing (name)
-import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
+import Html.Events
+import Json.Decode as Decode
 import Lamdera exposing (sendToBackend)
 import Types exposing (..)
 import Url
@@ -149,11 +158,17 @@ update msg model =
         ChangeNewGameSettingGridSize gridSize ->
             ( { model | newGameSettings = setNewGameSettingGridSize model.newGameSettings gridSize }, Cmd.none )
 
+        ChangeNewGameSettingTeam team ->
+            ( { model | newGameSettings = setNewGameSettingTeam model.newGameSettings (teamFromString team) }, Cmd.none )
+
         ChangeNewUserSettingTeam team ->
             ( { model | newUserSettings = setNewUserSettingTeam model.newUserSettings (teamFromString team) }, Cmd.none )
 
         ChangeNewUserSettingUsername username ->
             ( { model | newUserSettings = setNewUserSettingUsername model.newUserSettings username }, Cmd.none )
+
+        LeavingGame ->
+            ( { model | activeGame = Nothing }, sendToBackend GetPublicGames )
 
         _ ->
             -- Debug.todo "Finish FrontendMsg updates"
@@ -252,6 +267,11 @@ setNewGameSettingGridSize oldSettings gridSize =
     { oldSettings | gridSize = gridSizeFromString gridSize }
 
 
+setNewGameSettingTeam : NewGameSettings -> Team -> NewGameSettings
+setNewGameSettingTeam oldSettings team =
+    { oldSettings | startingTeam = team }
+
+
 setNewUserSettingUsername : NewUserSettings -> String -> NewUserSettings
 setNewUserSettingUsername oldSettings username =
     { oldSettings | username = username }
@@ -260,6 +280,16 @@ setNewUserSettingUsername oldSettings username =
 setNewUserSettingTeam : NewUserSettings -> Team -> NewUserSettings
 setNewUserSettingTeam oldSettings team =
     { oldSettings | team = team }
+
+
+getUsername : Maybe User -> String
+getUsername user =
+    case user of
+        Just u ->
+            u.name
+
+        Nothing ->
+            ""
 
 
 gridSizeFromString : String -> GridSize
@@ -331,6 +361,23 @@ getPlayers game team =
     game.users
 
 
+onEnter : msg -> Element.Attribute msg
+onEnter msg =
+    Element.htmlAttribute
+        (Html.Events.on "keyup"
+            (Decode.field "key" Decode.string
+                |> Decode.andThen
+                    (\key ->
+                        if key == "Enter" then
+                            Decode.succeed msg
+
+                        else
+                            Decode.fail "Not the enter key"
+                    )
+            )
+        )
+
+
 
 -- VIEW
 
@@ -339,19 +386,11 @@ view : Model -> Browser.Document FrontendMsg
 view model =
     { title = ""
     , body =
-        [ Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
-            [ Html.img [ Attr.src "https://lamdera.app/lamdera-logo-black.png", Attr.width 150 ] []
-            , Html.div
-                [ Attr.style "font-family" "sans-serif"
-                , Attr.style "padding-top" "40px"
-                ]
-                [ viewSwitch model ]
-            ]
-        ]
+        [ Element.layout [] (viewSwitch model) ]
     }
 
 
-viewSwitch : Model -> Html.Html FrontendMsg
+viewSwitch : Model -> Element FrontendMsg
 viewSwitch model =
     case model.user of
         Nothing ->
@@ -366,48 +405,62 @@ viewSwitch model =
                     viewGame game user
 
 
-viewLandingPage : Model -> Html.Html FrontendMsg
+viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    Html.div []
-        [ Html.div [] [ Html.text "Welcome" ]
-        , viewCreateUserForm model
-        ]
+    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model ]
 
 
-viewLobby : Model -> Html.Html FrontendMsg
+viewLobby : Model -> Element FrontendMsg
 viewLobby model =
-    Html.div []
-        [ Html.div []
-            [ viewCreateGameForm model
-            , viewPublicGames model
+    column [ Element.width Element.fill, Element.height Element.fill ]
+        [ row [ Element.width Element.fill, Element.height Element.fill, Element.centerY ]
+            [ column [ Element.centerY, Element.centerX ]
+                [ row
+                    [ Element.width Element.fill
+                    , Element.paddingEach
+                        { bottom = 0
+                        , left = 50
+                        , right = 50
+                        , top = 50
+                        }
+                    ]
+                    [ el [] (text ("Welcome " ++ getUsername model.user)) ]
+                , row [ Element.alignLeft, Element.width Element.fill ]
+                    [ viewCreateGameForm model
+                    , viewPublicGames model
+                    ]
+                ]
             ]
         ]
 
 
-viewGame : Game -> User -> Html.Html FrontendMsg
+viewGame : Game -> User -> Element FrontendMsg
 viewGame game user =
     let
         endScore =
-            [ Html.div [] [ Html.text (getScore game Blue) ]
-            , Html.div [] [ Html.text (getScore game Red) ]
+            [ el [] (text (getScore game Blue))
+            , el [] (text (getScore game Red))
             ]
 
         gameOver =
-            endScore
-                ++ [ viewGameBoardWrapper (viewCardsGameOver game.cards) ]
+            viewGameBoardWrapper game.gridSize (viewCardsGameOver game.cards)
     in
     case game.gameStatus of
         RedWon ->
-            Html.div []
-                (Html.div [] [ Html.text "Red won!" ]
-                    :: gameOver
-                )
+            column [ Element.width Element.fill ]
+                [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text "Red won!") ]
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
+                , gameOver
+                ]
 
         BlueWon ->
-            Html.div []
-                (Html.div [] [ Html.text "Blue won!" ]
-                    :: gameOver
-                )
+            column [ Element.width Element.fill ]
+                [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text "Blue won!") ]
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
+                , gameOver
+                ]
 
         RedTurn ->
             viewGamePlaying game user
@@ -416,112 +469,129 @@ viewGame game user =
             viewGamePlaying game user
 
 
-viewPublicGames : Model -> Html.Html FrontendMsg
+viewPublicGames : Model -> Element FrontendMsg
 viewPublicGames model =
     let
         publicGames =
             List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
     in
-    Html.div []
-        (List.map
-            (\g -> Html.div [] [ Html.span [] [ Html.text ("Game " ++ String.fromInt g.id) ], Html.button [ Attr.style "cursor" "pointer", onClick (JoiningGame g.id) ] [ Html.text "Join" ] ])
-            publicGames
-        )
+    row [ Element.width Element.fill, Element.padding 50, Element.alignTop ]
+        [ column [ Element.width (Element.px 200), Element.centerX ]
+            (row [ Element.width (Element.fill |> Element.minimum 200) ] [ el [ Element.alignRight, Font.alignRight, Element.paddingXY 0 10 ] (text "Public Games") ]
+                :: List.map
+                    (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5, Element.alignRight, Font.alignRight ] [ el [ Element.width Element.fill ] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
+                    publicGames
+            )
+        ]
 
 
-viewGameHeader : Game -> User -> Html.Html FrontendMsg
+viewGameHeader : Game -> User -> Element FrontendMsg
 viewGameHeader game user =
-    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "margin" "auto", Attr.style "margin-bottom" "1em" ]
+    row [ Element.width Element.fill, Element.padding 10 ]
         [ viewBlueTeam game
-        , viewTurnAndToggles game user
+        , row [ Element.width (Element.fillPortion 3) ] [ viewTurnAndToggles game user ]
         , viewRedTeam game
         ]
 
 
-viewGameBoardWrapper : List (Html msg) -> Html msg
-viewGameBoardWrapper =
-    Html.div [ Attr.style "display" "flex", Attr.style "width" "80%", Attr.style "flex-wrap" "wrap", Attr.style "margin" "auto auto" ]
+viewGameBoardWrapper : GridSize -> List (Element msg) -> Element msg
+viewGameBoardWrapper gridsize =
+    case gridsize of
+        SmallGrid ->
+            Element.wrappedRow [ Element.width (Element.px 1100), Element.padding 10, Element.spacing 10, centerX ]
+
+        MediumGrid ->
+            Element.wrappedRow [ Element.width (Element.px 1350), Element.padding 10, Element.spacing 10, centerX ]
+
+        LargeGrid ->
+            Element.wrappedRow [ Element.width (Element.px 1600), Element.padding 10, Element.spacing 10, centerX ]
 
 
-viewGamePlaying : Game -> User -> Html.Html FrontendMsg
+viewGamePlaying : Game -> User -> Element FrontendMsg
 viewGamePlaying game user =
     if user.cluegiver then
-        Html.div []
+        column [ Element.width Element.fill ]
             [ viewGameHeader game user
-            , viewGameBoardWrapper (viewCardsClueGiver game.cards)
+            , viewGameBoardWrapper game.gridSize (viewCardsClueGiver game.cards)
             ]
 
     else
-        Html.div []
+        column [ Element.width Element.fill ]
             [ viewGameHeader game user
-            , viewGameBoardWrapper (viewCardsPlaying game.cards (isItUsersTurn user.team game.gameStatus))
+            , viewGameBoardWrapper game.gridSize (viewCardsPlaying game.cards (isItUsersTurn user.team game.gameStatus))
             ]
 
 
-viewBlueTeam : Game -> Html.Html FrontendMsg
+viewBlueTeam : Game -> Element FrontendMsg
 viewBlueTeam game =
     let
         score =
-            Html.div [] [ Html.text (getScore game Blue) ]
+            el [] (text (getScore game Blue))
 
         players =
-            Html.div [] (List.map (\p -> Html.div [] [ Html.text p ]) (getPlayers game Blue))
+            column [] (List.map (\p -> el [] (text p)) (getPlayers game Blue))
     in
-    Html.div [ Attr.style "justify-content" "flex-start" ] [ score, players ]
+    column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
 
-viewRedTeam : Game -> Html.Html FrontendMsg
+viewRedTeam : Game -> Element FrontendMsg
 viewRedTeam game =
     let
         score =
-            Html.div [] [ Html.text (getScore game Red) ]
+            el [] (text (getScore game Red))
 
         players =
-            Html.div [] (List.map (\p -> Html.div [] [ Html.text p ]) (getPlayers game Red))
+            column [] (List.map (\p -> el [] (text p)) (getPlayers game Red))
     in
-    Html.div [ Attr.style "justify-content" "flex-end" ] [ score, players ]
+    column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
 
-viewTurnAndToggles : Game -> User -> Html.Html FrontendMsg
+viewTurnAndToggles : Game -> User -> Element FrontendMsg
 viewTurnAndToggles game user =
     let
         endTurnButton =
             if isItUsersTurn user.team game.gameStatus then
-                Html.button [ onClick EndingTurn ] [ Html.text "End Turn" ]
+                Input.button viewButtonAttributes { onPress = Just EndingTurn, label = text "End Turn" }
 
             else
-                Html.button [ Attr.disabled True ] [ Html.text "End Turn" ]
+                el [] (text "")
+
+        centered =
+            [ Element.centerX, Element.centerY ]
 
         controlAttrs =
-            [ Attr.style "justify-content" "center"
-            , Attr.style "margin" "auto"
+            [ Element.padding 5
+            , Element.spacing 5
             ]
+                ++ centered
     in
     case game.gameStatus of
         RedWon ->
-            Html.div controlAttrs
-                [ Html.div [ Attr.style "color" "red" ] [ Html.text "Red Won!" ]
+            row controlAttrs
+                [ el centered (text "Red Won!")
                 ]
 
         BlueWon ->
-            Html.div controlAttrs
-                [ Html.div [ Attr.style "color" "blue" ] [ Html.text "Blue Won!" ]
+            row controlAttrs
+                [ el centered (text "Blue Won!")
                 ]
 
         RedTurn ->
-            Html.div controlAttrs
-                [ Html.div [ Attr.style "color" "red" ] [ Html.text "It's Red's turn." ]
-                , Html.div [] [ endTurnButton ]
-                , Html.div [] [ viewClueGiverToggleButton user ]
-                , Html.div [] [ viewTeamToggleButton user ]
+            row controlAttrs
+                [ el centered (text "It's Red's turn.")
+                , el centered endTurnButton
+                , el centered (viewClueGiverToggleButton user)
+                , el centered (viewTeamToggleButton user)
+                , el centered viewLeaveGameButton
                 ]
 
         BlueTurn ->
-            Html.div controlAttrs
-                [ Html.div [ Attr.style "color" "blue" ] [ Html.text "It's Blue's turn." ]
-                , Html.div [] [ endTurnButton ]
-                , Html.div [] [ viewClueGiverToggleButton user ]
-                , Html.div [] [ viewTeamToggleButton user ]
+            row controlAttrs
+                [ el centered (text "It's Blue's turn.")
+                , el centered endTurnButton
+                , el centered (viewClueGiverToggleButton user)
+                , el centered (viewTeamToggleButton user)
+                , el centered viewLeaveGameButton
                 ]
 
 
@@ -529,159 +599,238 @@ viewTurnAndToggles game user =
 -- VIEW CARDS
 
 
-viewCardsPlaying : List Card -> Bool -> List (Html.Html FrontendMsg)
+viewCardsPlaying : List Card -> Bool -> List (Element FrontendMsg)
 viewCardsPlaying cardList clickable =
     List.map
         (\c ->
-            Html.div
-                (viewCardAttributes c clickable ++ viewCardColorIfRevealed c)
-                [ Html.text c.word ]
+            Element.paragraph (viewCardAttributes c clickable ++ viewCardColorIfRevealed c)
+                [ text c.word ]
         )
         cardList
 
 
-viewCardAttributes : Card -> Bool -> List (Html.Attribute FrontendMsg)
-viewCardAttributes card clickable =
-    let
-        base =
-            [ Attr.style "width" "10%"
-            , Attr.style "flex-grow" "5"
-            , Attr.style "padding" "3.5%"
-            , Attr.style "margin" "1%"
-            , Attr.style "border" "solid black 1px"
-            , Attr.style "border-radius" "5px"
-            ]
-    in
-    if clickable then
-        base ++ [ Attr.style "cursor" "pointer", onClick (RevealingCard card) ]
-
-    else
-        base
-
-
-viewCardsGameOver : List Card -> List (Html.Html FrontendMsg)
+viewCardsGameOver : List Card -> List (Element FrontendMsg)
 viewCardsGameOver cardList =
-    let
-        cardAttr =
-            [ Attr.style "width" "10%"
-            , Attr.style "flex-grow" "5"
-            , Attr.style "padding" "3.5%"
-            , Attr.style "margin" "1%"
-            , Attr.style "border" "solid black 1px"
-            , Attr.style "border-radius" "5px"
-            ]
-    in
     List.map
         (\c ->
-            Html.div
-                (cardAttr ++ viewCardColor c)
-                [ Html.text c.word ]
+            el (viewCardAttributes c False ++ viewCardColorAttributes c)
+                (text c.word)
         )
         cardList
 
 
-viewCardsClueGiver : List Card -> List (Html.Html FrontendMsg)
+viewCardsClueGiver : List Card -> List (Element FrontendMsg)
 viewCardsClueGiver cardList =
-    let
-        cardAttr =
-            [ Attr.style "width" "10%"
-            , Attr.style "flex-grow" "5"
-            , Attr.style "padding" "3.5%"
-            , Attr.style "margin" "1%"
-            , Attr.style "border" "solid black 1px"
-            , Attr.style "border-radius" "5px"
-            ]
-    in
     List.map
         (\c ->
-            Html.div
-                (cardAttr ++ viewCardColor c)
-                [ Html.text c.word ]
+            el (viewCardAttributes c False ++ viewCardColorAttributes c)
+                (text c.word)
         )
         cardList
-
-
-viewCardColorIfRevealed : Card -> List (Html.Attribute FrontendMsg)
-viewCardColorIfRevealed card =
-    if card.revealed then
-        viewCardColor card
-
-    else
-        [ Attr.style "background-color" "white" ]
-
-
-viewCardColor : Card -> List (Html.Attribute FrontendMsg)
-viewCardColor card =
-    let
-        cardColorAttr =
-            Attr.style "background-color" (cardCardAlignmentToString card.team)
-    in
-    case card.team of
-        Assassin ->
-            [ cardColorAttr
-            , Attr.style "color" "white"
-            ]
-
-        _ ->
-            [ cardColorAttr ]
 
 
 
 -- VIEW BUTTONS
 
 
-viewClueGiverToggleButton : User -> Html.Html FrontendMsg
+viewClueGiverToggleButton : User -> Element FrontendMsg
 viewClueGiverToggleButton user =
     if user.cluegiver then
-        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Stop being clue giver" ]
+        Input.button viewButtonAttributes { onPress = Just ToggleClueGiverStatus, label = text "Stop being clue giver" }
 
     else
-        Html.button [ onClick ToggleClueGiverStatus ] [ Html.text "Become clue giver" ]
+        Input.button viewButtonAttributes { onPress = Just ToggleClueGiverStatus, label = text "Become clue giver" }
 
 
-viewTeamToggleButton : User -> Html.Html FrontendMsg
+viewTeamToggleButton : User -> Element FrontendMsg
 viewTeamToggleButton user =
     if user.team == Red then
-        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Blue team" ]
+        Input.button viewButtonAttributes { onPress = Just ToggleTeam, label = text "Switch to Blue team" }
 
     else
-        Html.button [ onClick ToggleTeam ] [ Html.text "Switch to Red team" ]
+        Input.button viewButtonAttributes { onPress = Just ToggleTeam, label = text "Switch to Red team" }
+
+
+viewLeaveGameButton : Element FrontendMsg
+viewLeaveGameButton =
+    Input.button viewButtonAttributes
+        { onPress = Just LeavingGame
+        , label = text "Return to lobby"
+        }
 
 
 
 -- VIEW FORMS
 
 
-viewCreateUserForm : Model -> Html.Html FrontendMsg
+viewCreateUserForm : Model -> Element FrontendMsg
 viewCreateUserForm model =
-    Html.div []
-        [ Html.form [ Attr.style "display" "inline", onSubmit NewUser ]
-            [ Html.fieldset []
-                [ Html.label [ Attr.style "margin" "2px", Attr.for "username" ] [ Html.text "Username" ]
-                , Html.input [ Attr.style "margin" "2px", Attr.id "username", onInput ChangeNewUserSettingUsername, Attr.value model.newUserSettings.username ] []
-                , Html.label [ Attr.style "margin" "2px", Attr.for "team" ] [ Html.text "Team" ]
-                , Html.select [ Attr.style "margin" "2px", Attr.id "team", Attr.value (teamToString model.newUserSettings.team), onInput ChangeNewUserSettingTeam ]
-                    [ Html.option [ Attr.value "Blue" ] [ Html.text "Blue" ]
-                    , Html.option [ Attr.value "Red" ] [ Html.text "Red" ]
-                    ]
-                , Html.button [ Attr.style "margin" "2px", Attr.type_ "submit" ] [ Html.text "Start" ]
+    row [ Element.width Element.fill, Element.height Element.fill, Element.padding 50, Element.spacing 5, Element.centerY ]
+        [ column [ Element.width (Element.px 800), Element.spacing 10, Element.centerX ]
+            [ row [ Element.width Element.fill ]
+                [ Input.text [ Element.spacing 5, onEnter NewUser ]
+                    { label = Input.labelLeft [] (text "Username")
+                    , onChange = ChangeNewUserSettingUsername
+                    , placeholder = Nothing
+                    , text = model.newUserSettings.username
+                    }
+                ]
+            , row [ Element.width Element.fill ]
+                [ Input.radioRow
+                    [ Element.spacing 10 ]
+                    { label = Input.labelLeft [ Element.paddingEach { bottom = 0, left = 0, right = 50, top = 0 } ] (text "Team")
+                    , onChange = ChangeNewUserSettingTeam
+                    , selected = Just (teamToString model.newUserSettings.team)
+                    , options = [ Input.option "Blue" (text "Blue"), Input.option "Red" (text "Red") ]
+                    }
+                ]
+            , row [ Element.width Element.fill ]
+                [ Input.button
+                    (viewButtonAttributes ++ [ Element.centerX, Element.width (Element.px 150) ])
+                    { onPress = Just NewUser
+                    , label = text "Start"
+                    }
                 ]
             ]
         ]
 
 
-viewCreateGameForm : Model -> Html.Html FrontendMsg
+viewCreateGameForm : Model -> Element FrontendMsg
 viewCreateGameForm model =
-    Html.div []
-        [ Html.form [ onSubmit CreatingNewGame ]
-            [ Html.label [ Attr.for "public" ] [ Html.text "Public?" ]
-            , Html.input [ Attr.type_ "checkbox", Attr.id "public", onCheck ToggleNewGameSettingPublic, Attr.checked model.newGameSettings.public ] []
-            , Html.label [ Attr.for "gridsize" ] [ Html.text "Size of grid:" ]
-            , Html.select [ Attr.id "gridsize", onInput ChangeNewGameSettingGridSize, Attr.value (gridSizeToString model.newGameSettings.gridSize) ]
-                [ Html.option [ Attr.value "Small" ] [ Html.text "Small" ]
-                , Html.option [ Attr.value "Medium" ] [ Html.text "Medium" ]
-                , Html.option [ Attr.value "Large" ] [ Html.text "Large" ]
+    row [ Element.width Element.fill, Element.padding 50, Element.spacing 5, Element.alignTop ]
+        [ column [ Element.width (Element.px 500), Element.centerX ]
+            [ el [ Element.paddingXY 0 10 ] (text "Create a new game")
+            , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
+                [ row [ Element.width Element.fill ]
+                    [ Input.checkbox []
+                        { onChange = ToggleNewGameSettingPublic
+                        , icon = Input.defaultCheckbox
+                        , checked = model.newGameSettings.public
+                        , label =
+                            Input.labelRight
+                                [ Element.paddingEach
+                                    { left = 10
+                                    , bottom = 0
+                                    , right = 0
+                                    , top = 0
+                                    }
+                                ]
+                                (text "Make game public")
+                        }
+                    ]
+                , row [ Element.width Element.fill ]
+                    [ Input.radioRow [ Element.spacing 10 ]
+                        { onChange = ChangeNewGameSettingGridSize
+                        , selected = Just (gridSizeToString model.newGameSettings.gridSize)
+                        , label =
+                            Input.labelLeft
+                                [ Element.paddingEach
+                                    { bottom = 0
+                                    , left = 0
+                                    , right = 55
+                                    , top = 0
+                                    }
+                                , Element.centerY
+                                ]
+                                (text "Gridsize")
+                        , options =
+                            [ Input.option "Small" (text "Small")
+                            , Input.option "Medium" (text "Medium")
+                            , Input.option "Large" (text "Large")
+                            ]
+                        }
+                    ]
+                , row [ Element.width Element.fill ]
+                    [ Input.radioRow [ Element.spacing 10 ]
+                        { onChange = ChangeNewGameSettingTeam
+                        , selected = Just (teamToString model.newGameSettings.startingTeam)
+                        , label =
+                            Input.labelLeft
+                                [ Element.paddingEach
+                                    { bottom = 0
+                                    , left = 0
+                                    , right = 5
+                                    , top = 0
+                                    }
+                                ]
+                                (text "Starting Team")
+                        , options =
+                            [ Input.option "Red" (text "Red")
+                            , Input.option "Blue" (text "Blue")
+                            ]
+                        }
+                    ]
+                , row [ Element.width Element.fill ]
+                    [ Input.button (viewButtonAttributes ++ [])
+                        { onPress = Just CreatingNewGame
+                        , label = text "Create Game"
+                        }
+                    ]
                 ]
-            , Html.button [ Attr.type_ "submit" ] [ Html.text "Create Game" ]
             ]
         ]
+
+
+
+-- VIEW STYLE ATTRIBUTES
+
+
+viewButtonAttributes : List (Element.Attribute msg)
+viewButtonAttributes =
+    [ Background.color (rgb 1 1 1)
+    , Border.solid
+    , Border.width 1
+    , Element.paddingEach { bottom = 10, left = 10, right = 10, top = 15 }
+    , Font.center
+    , Border.rounded 5
+    , Border.color (rgb 0 0 0)
+    , Element.mouseOver [ Background.color (rgb 0.8 0.8 0.8) ]
+    ]
+
+
+viewCardAttributes : Card -> Bool -> List (Element.Attribute FrontendMsg)
+viewCardAttributes card clickable =
+    let
+        base =
+            [ Element.width (Element.fill |> Element.maximum 250 |> Element.minimum 250)
+            , Element.spacing 50
+            , Element.padding 40
+            , Font.center
+            , Element.alignLeft
+            , Border.rounded 5
+            , Border.width 1
+            , Border.solid
+            ]
+    in
+    if clickable then
+        base
+            ++ [ Element.pointer
+               , Element.mouseOver [ Border.glow (rgb 0.5 0.5 0) 0.5 ]
+               , onClick (RevealingCard card)
+               ]
+
+    else
+        base
+
+
+viewCardColorAttributes : Card -> List (Element.Attribute FrontendMsg)
+viewCardColorAttributes card =
+    let
+        cardColorAttr =
+            Background.color (cardCardAlignmentToRgb card.team)
+    in
+    case card.team of
+        Assassin ->
+            [ cardColorAttr, Font.color (rgb 1 1 1) ]
+
+        _ ->
+            [ cardColorAttr ]
+
+
+viewCardColorIfRevealed : Card -> List (Element.Attribute FrontendMsg)
+viewCardColorIfRevealed card =
+    if card.revealed then
+        viewCardColorAttributes card
+
+    else
+        [ Background.color (rgb 1 1 1) ]

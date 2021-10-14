@@ -104,6 +104,7 @@ type FrontendMsg
     | JoiningGame Int
     | ToggleNewGameSettingPublic Bool
     | ChangeNewGameSettingGridSize String
+    | ChangeNewGameSettingTeam String
     | RevealingCard Card
     | EndingTurn
     | ToggleClueGiverStatus
