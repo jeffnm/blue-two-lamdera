@@ -24,7 +24,7 @@ type alias BackendModel =
 
 type alias Game =
     { id : Int
-    , users : List String
+    , users : List User
     , gridSize : GridSize
     , public : Bool
     , cards : List Card
@@ -37,6 +37,8 @@ type alias Game =
 type alias NewUserSettings =
     { username : String
     , team : Team
+    , sessionId : Maybe SessionId
+    , clientId : Maybe ClientId
     }
 
 
@@ -54,15 +56,12 @@ type alias Card =
     }
 
 
-
--- TODO: Remove games from user type alias and make users for Game a proper User with the client id in the record.
-
-
 type alias User =
     { name : String
     , team : Team
     , cluegiver : Bool
-    , games : List Game
+    , sessionId : Maybe SessionId
+    , clientId : Maybe ClientId
     }
 
 
@@ -113,14 +112,14 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
-    | CreateNewGame NewGameSettings
-    | JoinGame Int
+    | CreateNewGame NewGameSettings User
+    | JoinGame Int User
     | LoadGame Game
+    | LeaveGame Game User
     | GetPublicGames
-    | GetUserGames
     | ChangeCardRevealedState Card Game
     | EndTurn Game GameStatus
-    | ChangeUserTeam
+    | ChangeUserTeam Game User
     | EndGame Team Game
 
 
@@ -129,6 +128,8 @@ type BackendMsg
     | ShuffledWords (List String)
     | ShuffledCardTeams (List CardAlignment)
     | SendGameToPlayers Int
+    | ClientConnected SessionId ClientId
+    | ClientDisconnected SessionId ClientId
 
 
 type ToFrontend
@@ -136,3 +137,4 @@ type ToFrontend
     | PublicGames (List Game)
     | UserGames
     | ActiveGame Game
+    | ClientInfo SessionId ClientId

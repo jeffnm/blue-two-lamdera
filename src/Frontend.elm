@@ -15,7 +15,7 @@ import Html exposing (Html)
 import Html.Attributes as Attr exposing (name)
 import Html.Events
 import Json.Decode as Decode
-import Lamdera exposing (sendToBackend)
+import Lamdera exposing (ClientId, SessionId, sendToBackend)
 import Types exposing (..)
 import Url
 
@@ -42,13 +42,12 @@ app =
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
+    -- TODO: Generate a stub URL for each game to use as ID and access URL
     ( { key = key
-
-      --   , user = Just testUser
       , user = Nothing
       , activeGame = Nothing
       , newGameSettings = NewGameSettings True MediumGrid Blue
-      , newUserSettings = NewUserSettings "" Blue
+      , newUserSettings = NewUserSettings "" Blue Nothing Nothing
       , publicGames = []
       }
     , sendToBackend GetPublicGames
@@ -81,13 +80,23 @@ update msg model =
             ( model, Cmd.none )
 
         NewUser ->
-            ( { model | user = Just (User model.newUserSettings.username model.newUserSettings.team False []) }, sendToBackend GetPublicGames )
+            ( { model | user = Just (User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId) }, sendToBackend GetPublicGames )
 
         CreatingNewGame ->
-            ( model, sendToBackend (CreateNewGame model.newGameSettings) )
+            case model.user of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just user ->
+                    ( model, sendToBackend (CreateNewGame model.newGameSettings user) )
 
         JoiningGame id ->
-            ( model, sendToBackend (JoinGame id) )
+            case model.user of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just user ->
+                    ( model, sendToBackend (JoinGame id user) )
 
         RevealingCard card ->
             case model.activeGame of
@@ -150,7 +159,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just user ->
-                    ( { model | user = Just (toggleTeam user) }, Cmd.none )
+                    case model.activeGame of
+                        Nothing ->
+                            ( { model | user = Just (toggleTeam user) }, Cmd.none )
+
+                        Just game ->
+                            ( { model | user = Just (toggleTeam user) }, sendToBackend (ChangeUserTeam game (toggleTeam user)) )
 
         ToggleNewGameSettingPublic value ->
             ( { model | newGameSettings = toggleNewGameSettingPublic model.newGameSettings value }, Cmd.none )
@@ -168,7 +182,17 @@ update msg model =
             ( { model | newUserSettings = setNewUserSettingUsername model.newUserSettings username }, Cmd.none )
 
         LeavingGame ->
-            ( { model | activeGame = Nothing }, sendToBackend GetPublicGames )
+            case model.user of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just user ->
+                    case model.activeGame of
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                        Just game ->
+                            ( { model | activeGame = Nothing }, Cmd.batch [ sendToBackend (LeaveGame game user), sendToBackend GetPublicGames ] )
 
         _ ->
             -- Debug.todo "Finish FrontendMsg updates"
@@ -180,6 +204,9 @@ updateFromBackend msg model =
     case msg of
         NoOpToFrontend ->
             ( model, Cmd.none )
+
+        ClientInfo sessionId clientId ->
+            ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }, Cmd.none )
 
         ActiveGame game ->
             ( { model | activeGame = Just game }, Cmd.none )
@@ -282,6 +309,11 @@ setNewUserSettingTeam oldSettings team =
     { oldSettings | team = team }
 
 
+setNewUserSettingSessionIdAndClientId : NewUserSettings -> SessionId -> ClientId -> NewUserSettings
+setNewUserSettingSessionIdAndClientId oldSettings sessionId clientId =
+    { oldSettings | sessionId = Just sessionId, clientId = Just clientId }
+
+
 getUsername : Maybe User -> String
 getUsername user =
     case user of
@@ -355,10 +387,11 @@ getScore game team =
             "Blue: " ++ blue ++ " / " ++ blueTotal
 
 
-getPlayers : Game -> Team -> List String
-getPlayers game team =
-    -- List.filter (\p -> p.team == team) game.users
-    game.users
+getPlayersNamesByTeam : Game -> Team -> List String
+getPlayersNamesByTeam game team =
+    List.filter (\p -> p.team == team) game.users
+        |> List.filter (\p -> p.clientId /= Nothing)
+        |> List.map (\p -> p.name)
 
 
 onEnter : msg -> Element.Attribute msg
@@ -529,7 +562,7 @@ viewBlueTeam game =
             el [] (text (getScore game Blue))
 
         players =
-            column [] (List.map (\p -> el [] (text p)) (getPlayers game Blue))
+            column [] (List.map (\p -> el [] (text p)) (getPlayersNamesByTeam game Blue))
     in
     column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
@@ -541,7 +574,7 @@ viewRedTeam game =
             el [] (text (getScore game Red))
 
         players =
-            column [] (List.map (\p -> el [] (text p)) (getPlayers game Red))
+            column [] (List.map (\p -> el [] (text p)) (getPlayersNamesByTeam game Red))
     in
     column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
