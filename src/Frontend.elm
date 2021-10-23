@@ -528,16 +528,19 @@ viewGameHeader game user =
 
 
 viewGameBoardWrapper : GridSize -> List (Element msg) -> Element msg
-viewGameBoardWrapper gridsize =
+viewGameBoardWrapper gridsize gameboard =
     case gridsize of
         SmallGrid ->
-            Element.wrappedRow [ Element.width (Element.px 1100), Element.padding 10, Element.spacing 10, centerX ]
+            Element.column [ Element.width Element.fill, Element.padding 10, centerX ]
+                [ Element.wrappedRow [ Element.width (Element.fill |> Element.minimum 1100), Element.padding 10, Element.spacing 10 ] gameboard ]
 
         MediumGrid ->
-            Element.wrappedRow [ Element.width (Element.px 1350), Element.padding 10, Element.spacing 10, centerX ]
+            Element.column [ Element.width Element.fill, Element.padding 10, centerX ]
+                [ Element.wrappedRow [ Element.width (Element.fill |> Element.minimum 1350), Element.padding 10, Element.spacing 10 ] gameboard ]
 
         LargeGrid ->
-            Element.wrappedRow [ Element.width (Element.px 1600), Element.padding 10, Element.spacing 10, centerX ]
+            Element.column [ Element.width Element.fill, Element.padding 10, centerX ]
+                [ Element.wrappedRow [ Element.width (Element.fill |> Element.minimum 1600), Element.padding 10, Element.spacing 10 ] gameboard ]
 
 
 viewGamePlaying : Game -> User -> Element FrontendMsg

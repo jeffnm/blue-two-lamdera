@@ -58,7 +58,7 @@ update msg model =
             ( model, sendToFrontend clientId (ClientInfo sessionId clientId) )
 
         ClientDisconnected sessionId clientId ->
-            -- TODO: Let's remove the user from all games when they disconnect - the username is really just a friendly name, not an account.
+            -- TODO: Let's remove the user from all games when they disconnect, rather than removing sessionID and clientID - the username is really just a friendly name, not an account for auth.
             removeSessionAndClientIdsFromUserInAllGames model sessionId clientId
 
         ShuffledWords words ->

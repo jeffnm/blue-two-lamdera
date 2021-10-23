@@ -125,11 +125,9 @@ generateCards words teams =
 
 shuffleWords : List String -> Cmd BackendMsg
 shuffleWords words =
-    -- Debug.todo "figure out how to shuffle stuff"
     Random.generate ShuffledWords (Random.List.shuffle words)
 
 
 shuffleCardAlignments : List CardAlignment -> Cmd BackendMsg
 shuffleCardAlignments teams =
-    -- Debug.todo "figure out how to shuffle stuff"
     Random.generate ShuffledCardTeams (Random.List.shuffle teams)
