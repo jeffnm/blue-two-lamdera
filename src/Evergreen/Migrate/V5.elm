@@ -5,7 +5,7 @@ import Evergreen.V2.Types as Old
 import Evergreen.V5.Types as New exposing (ToBackend(..))
 import Lamdera exposing (sendToBackend)
 import Lamdera.Migrations exposing (..)
-import Types exposing (CardAlignment(..))
+import Types
 
 
 frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
@@ -18,14 +18,14 @@ frontendModel old =
                         newmodel =
                             New.FrontendModel old.key Nothing Nothing (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
                     in
-                    ModelMigrated ( newmodel, sendToBackend GetPublicGames )
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
 
                 Just game ->
                     let
                         newmodel =
                             New.FrontendModel old.key Nothing (Just (oldGameToNewGame game)) (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
                     in
-                    ModelMigrated ( newmodel, sendToBackend GetPublicGames )
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
 
         Just user ->
             case old.activeGame of
@@ -34,14 +34,14 @@ frontendModel old =
                         newmodel =
                             New.FrontendModel old.key (Just (New.User user.name (oldTeamToNewTeam user.team) user.cluegiver Nothing Nothing)) Nothing (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
                     in
-                    ModelMigrated ( newmodel, sendToBackend GetPublicGames )
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
 
                 Just game ->
                     let
                         newmodel =
                             New.FrontendModel old.key (Just (New.User user.name (oldTeamToNewTeam user.team) user.cluegiver Nothing Nothing)) (Just (oldGameToNewGame game)) (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
                     in
-                    ModelMigrated ( newmodel, sendToBackend GetPublicGames )
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
 
 
 backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
