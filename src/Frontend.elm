@@ -702,9 +702,10 @@ viewLeaveGameButton =
 viewCreateUserForm : Model -> Element FrontendMsg
 viewCreateUserForm model =
     row [ Element.width Element.fill, Element.height Element.fill, Element.padding 50, Element.spacing 5, Element.centerY ]
-        [ column [ Element.width (Element.px 800), Element.spacing 10, Element.centerX ]
+        [   column [Element.width (Element.fillPortion 1)][]
+            ,column [Element.width (Element.fillPortion 3), Element.spacing 10, Element.centerX ]
             [ row [ Element.width Element.fill ]
-                [ Input.text [ Element.spacing 5, onEnter NewUser ]
+                [ Input.text [ Element.spacing 5, onEnter NewUser , Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 200)]
                     { label = Input.labelLeft [] (text "Username")
                     , onChange = ChangeNewUserSettingUsername
                     , placeholder = Nothing
@@ -728,6 +729,7 @@ viewCreateUserForm model =
                     }
                 ]
             ]
+            , column [Element.width (Element.fillPortion 1)][]
         ]
 
 
