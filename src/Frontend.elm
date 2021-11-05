@@ -446,23 +446,25 @@ viewLandingPage model =
 viewLobby : Model -> Element FrontendMsg
 viewLobby model =
     column [ Element.width Element.fill, Element.height Element.fill ]
-        [ row [ Element.width Element.fill, Element.height Element.fill, Element.centerY ]
-            [ column [ Element.centerY, Element.centerX ]
+        [ row [ Element.width Element.fill, Element.height Element.fill]
+            [ column [ Element.width (Element.fillPortion 1)][]
+            , column [ Element.width (Element.fillPortion 3) ]
                 [ row
                     [ Element.width Element.fill
                     , Element.paddingEach
-                        { bottom = 0
-                        , left = 50
-                        , right = 50
-                        , top = 50
+                        { bottom = 20
+                        , left = 0
+                        , right = 0
+                        , top = 0
                         }
                     ]
                     [ el [] (text ("Welcome " ++ getUsername model.user)) ]
-                , row [ Element.alignLeft, Element.width Element.fill ]
+                , Element.wrappedRow [ Element.alignLeft, Element.width Element.fill ]
                     [ viewCreateGameForm model
                     , viewPublicGames model
                     ]
                 ]
+                ,column [ Element.width (Element.fillPortion 1)][]
             ]
         ]
 
@@ -508,14 +510,13 @@ viewPublicGames model =
         publicGames =
             List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
     in
-    row [ Element.width Element.fill, Element.padding 50, Element.alignTop ]
-        [ column [ Element.width (Element.px 200), Element.centerX ]
-            (row [ Element.width (Element.fill |> Element.minimum 200) ] [ el [ Element.alignRight, Font.alignRight, Element.paddingXY 0 10 ] (text "Public Games") ]
+        column [ Element.width (Element.fillPortion 1)]
+            (row [  ] [ el [  Element.paddingXY 0 20 ] (text "Public Games") ]
                 :: List.map
-                    (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5, Element.alignRight, Font.alignRight ] [ el [ Element.width Element.fill ] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
+                    (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5] [ el [ ] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
                     publicGames
             )
-        ]
+        
 
 
 viewGameHeader : Game -> User -> Element FrontendMsg
@@ -735,9 +736,8 @@ viewCreateUserForm model =
 
 viewCreateGameForm : Model -> Element FrontendMsg
 viewCreateGameForm model =
-    row [ Element.width Element.fill, Element.padding 50, Element.spacing 5, Element.alignTop ]
-        [ column [ Element.width (Element.px 500), Element.centerX ]
-            [ el [ Element.paddingXY 0 10 ] (text "Create a new game")
+        column [ Element.width (Element.fillPortion 3)]
+            [ el [ Element.paddingXY 0 20 ] (text "Create a new game")
             , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
                 [ row [ Element.width Element.fill ]
                     [ Input.checkbox []
@@ -806,7 +806,7 @@ viewCreateGameForm model =
                     ]
                 ]
             ]
-        ]
+        
 
 
 
