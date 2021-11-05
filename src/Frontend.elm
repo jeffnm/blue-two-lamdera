@@ -511,7 +511,7 @@ viewPublicGames model =
             List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
     in
         column [ Element.width (Element.fillPortion 1)]
-            (row [  ] [ el [  Element.paddingXY 0 20 ] (text "Public Games") ]
+            (row [  ] [ el [ Element.paddingXY 0 20 ] (text "Public Games") ]
                 :: List.map
                     (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5] [ el [ ] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
                     publicGames
@@ -532,16 +532,21 @@ viewGameBoardWrapper : GridSize -> List (Element msg) -> Element msg
 viewGameBoardWrapper gridsize gameboard =
     case gridsize of
         SmallGrid ->
-            Element.row [ Element.width Element.fill, Element.padding 10, centerX ]
-                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1100 |> Element.minimum 1100), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
+            Element.row [ Element.width Element.fill, Element.padding 10 ]
+                [ Element.column [centerX]
+                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1100 |> Element.minimum 1100), Element.padding 10, Element.spacing 10 ] gameboard ]
+                ]
 
         MediumGrid ->
-            Element.row [ Element.width Element.fill, Element.padding 10, centerX ]
+            Element.row [ Element.width Element.fill, Element.padding 10 ]
+                [ Element.column [centerX]
                 [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1350 |> Element.minimum 1350), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
-
+                ]
         LargeGrid ->
-            Element.row [ Element.width Element.fill, Element.padding 10, centerX ]
-                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1600 |> Element.minimum 1600), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
+            Element.row [ Element.width Element.fill, Element.padding 10 ]
+                [ Element.column [centerX]
+                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1600 |> Element.minimum 1600), Element.padding 10, Element.spacing 10] gameboard ]
+                ]
 
 
 viewGamePlaying : Game -> User -> Element FrontendMsg
