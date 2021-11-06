@@ -5,7 +5,7 @@ module Frontend exposing (..)
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Cards exposing (cardCardAlignmentToRgb, cardCardAlignmentToString)
-import Element as Element exposing (Element, centerX, column, el, paddingEach, rgb, row, text)
+import Element as Element exposing (Element, centerX, column, el, paddingEach, rgb, row, text, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events exposing (onClick)
@@ -446,8 +446,8 @@ viewLandingPage model =
 viewLobby : Model -> Element FrontendMsg
 viewLobby model =
     column [ Element.width Element.fill, Element.height Element.fill ]
-        [ row [ Element.width Element.fill, Element.height Element.fill]
-            [ column [ Element.width (Element.fillPortion 1)][]
+        [ row [ Element.width Element.fill, Element.height Element.fill ]
+            [ column [ Element.width (Element.fillPortion 1) ] []
             , column [ Element.width (Element.fillPortion 3) ]
                 [ row
                     [ Element.width Element.fill
@@ -464,7 +464,7 @@ viewLobby model =
                     , viewPublicGames model
                     ]
                 ]
-                ,column [ Element.width (Element.fillPortion 1)][]
+            , column [ Element.width (Element.fillPortion 1) ] []
             ]
         ]
 
