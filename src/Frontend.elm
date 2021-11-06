@@ -510,13 +510,12 @@ viewPublicGames model =
         publicGames =
             List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
     in
-        column [ Element.width (Element.fillPortion 1)]
-            (row [  ] [ el [ Element.paddingXY 0 20 ] (text "Public Games") ]
-                :: List.map
-                    (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5] [ el [ ] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
-                    publicGames
-            )
-        
+    column [ Element.width (Element.fillPortion 1) ]
+        (row [] [ el [ Element.paddingXY 0 20 ] (text "Public Games") ]
+            :: List.map
+                (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5 ] [ el [] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
+                publicGames
+        )
 
 
 viewGameHeader : Game -> User -> Element FrontendMsg
@@ -533,19 +532,20 @@ viewGameBoardWrapper gridsize gameboard =
     case gridsize of
         SmallGrid ->
             Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [centerX]
-                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1100 |> Element.minimum 1100), Element.padding 10, Element.spacing 10 ] gameboard ]
+                [ Element.column [ centerX ]
+                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1100 |> Element.minimum 1100), Element.padding 10, Element.spacing 10 ] gameboard ]
                 ]
 
         MediumGrid ->
             Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [centerX]
-                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1350 |> Element.minimum 1350), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
+                [ Element.column [ centerX ]
+                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1350 |> Element.minimum 1350), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
                 ]
+
         LargeGrid ->
             Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [centerX]
-                [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1600 |> Element.minimum 1600), Element.padding 10, Element.spacing 10] gameboard ]
+                [ Element.column [ centerX ]
+                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1600 |> Element.minimum 1600), Element.padding 10, Element.spacing 10 ] gameboard ]
                 ]
 
 
@@ -708,110 +708,115 @@ viewLeaveGameButton =
 viewCreateUserForm : Model -> Element FrontendMsg
 viewCreateUserForm model =
     row [ Element.width Element.fill, Element.height Element.fill, Element.padding 50, Element.spacing 5, Element.centerY ]
-        [   column [Element.width (Element.fillPortion 1)][]
-            ,column [Element.width (Element.fillPortion 3), Element.spacing 10, Element.centerX ]
+        [ column [ Element.width (Element.fillPortion 1) ] []
+        , column [ Element.width (Element.fillPortion 3) ]
             [ row [ Element.width Element.fill ]
-                [ Input.text [ Element.spacing 5, onEnter NewUser , Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 200)]
-                    { label = Input.labelLeft [] (text "Username")
-                    , onChange = ChangeNewUserSettingUsername
-                    , placeholder = Nothing
-                    , text = model.newUserSettings.username
-                    }
-                ]
-            , row [ Element.width Element.fill ]
-                [ Input.radioRow
-                    [ Element.spacing 10 ]
-                    { label = Input.labelLeft [ Element.paddingEach { bottom = 0, left = 0, right = 50, top = 0 } ] (text "Team")
-                    , onChange = ChangeNewUserSettingTeam
-                    , selected = Just (teamToString model.newUserSettings.team)
-                    , options = [ Input.option "Blue" (text "Blue"), Input.option "Red" (text "Red") ]
-                    }
-                ]
-            , row [ Element.width Element.fill ]
-                [ Input.button
-                    (viewButtonAttributes ++ [ Element.centerX, Element.width (Element.px 150) ])
-                    { onPress = Just NewUser
-                    , label = text "Start"
-                    }
+                [ column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ] []
+                , column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ]
+                    [ row [ Element.width Element.fill ]
+                        [ Input.text [ Element.spacing 5, onEnter NewUser, Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 400) ]
+                            { label = Input.labelLeft [] (text "Username")
+                            , onChange = ChangeNewUserSettingUsername
+                            , placeholder = Nothing
+                            , text = model.newUserSettings.username
+                            }
+                        ]
+                    , row [ Element.width Element.fill ]
+                        [ Input.radioRow
+                            [ Element.spacing 10 ]
+                            { label = Input.labelLeft [ Element.paddingEach { bottom = 0, left = 0, right = 50, top = 0 } ] (text "Team")
+                            , onChange = ChangeNewUserSettingTeam
+                            , selected = Just (teamToString model.newUserSettings.team)
+                            , options = [ Input.option "Blue" (text "Blue"), Input.option "Red" (text "Red") ]
+                            }
+                        ]
+                    , row [ Element.width Element.fill ]
+                        [ Input.button
+                            (viewButtonAttributes ++ [ Element.centerX, Element.width (Element.px 150) ])
+                            { onPress = Just NewUser
+                            , label = text "Start"
+                            }
+                        ]
+                    ]
+                , column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ] []
                 ]
             ]
-            , column [Element.width (Element.fillPortion 1)][]
+        , column [ Element.width (Element.fillPortion 1) ] []
         ]
 
 
 viewCreateGameForm : Model -> Element FrontendMsg
 viewCreateGameForm model =
-        column [ Element.width (Element.fillPortion 3)]
-            [ el [ Element.paddingXY 0 20 ] (text "Create a new game")
-            , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
-                [ row [ Element.width Element.fill ]
-                    [ Input.checkbox []
-                        { onChange = ToggleNewGameSettingPublic
-                        , icon = Input.defaultCheckbox
-                        , checked = model.newGameSettings.public
-                        , label =
-                            Input.labelRight
-                                [ Element.paddingEach
-                                    { left = 10
-                                    , bottom = 0
-                                    , right = 0
-                                    , top = 0
-                                    }
-                                ]
-                                (text "Make game public")
-                        }
-                    ]
-                , row [ Element.width Element.fill ]
-                    [ Input.radioRow [ Element.spacing 10 ]
-                        { onChange = ChangeNewGameSettingGridSize
-                        , selected = Just (gridSizeToString model.newGameSettings.gridSize)
-                        , label =
-                            Input.labelLeft
-                                [ Element.paddingEach
-                                    { bottom = 0
-                                    , left = 0
-                                    , right = 55
-                                    , top = 0
-                                    }
-                                , Element.centerY
-                                ]
-                                (text "Gridsize")
-                        , options =
-                            [ Input.option "Small" (text "Small")
-                            , Input.option "Medium" (text "Medium")
-                            , Input.option "Large" (text "Large")
+    column [ Element.width (Element.fillPortion 3) ]
+        [ el [ Element.paddingXY 0 20 ] (text "Create a new game")
+        , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
+            [ row [ Element.width Element.fill ]
+                [ Input.checkbox []
+                    { onChange = ToggleNewGameSettingPublic
+                    , icon = Input.defaultCheckbox
+                    , checked = model.newGameSettings.public
+                    , label =
+                        Input.labelRight
+                            [ Element.paddingEach
+                                { left = 10
+                                , bottom = 0
+                                , right = 0
+                                , top = 0
+                                }
                             ]
-                        }
-                    ]
-                , row [ Element.width Element.fill ]
-                    [ Input.radioRow [ Element.spacing 10 ]
-                        { onChange = ChangeNewGameSettingTeam
-                        , selected = Just (teamToString model.newGameSettings.startingTeam)
-                        , label =
-                            Input.labelLeft
-                                [ Element.paddingEach
-                                    { bottom = 0
-                                    , left = 0
-                                    , right = 5
-                                    , top = 0
-                                    }
-                                ]
-                                (text "Starting Team")
-                        , options =
-                            [ Input.option "Red" (text "Red")
-                            , Input.option "Blue" (text "Blue")
+                            (text "Make game public")
+                    }
+                ]
+            , row [ Element.width Element.fill ]
+                [ Input.radioRow [ Element.spacing 10 ]
+                    { onChange = ChangeNewGameSettingGridSize
+                    , selected = Just (gridSizeToString model.newGameSettings.gridSize)
+                    , label =
+                        Input.labelLeft
+                            [ Element.paddingEach
+                                { bottom = 0
+                                , left = 0
+                                , right = 55
+                                , top = 0
+                                }
+                            , Element.centerY
                             ]
-                        }
-                    ]
-                , row [ Element.width Element.fill ]
-                    [ Input.button (viewButtonAttributes ++ [])
-                        { onPress = Just CreatingNewGame
-                        , label = text "Create Game"
-                        }
-                    ]
+                            (text "Gridsize")
+                    , options =
+                        [ Input.option "Small" (text "Small")
+                        , Input.option "Medium" (text "Medium")
+                        , Input.option "Large" (text "Large")
+                        ]
+                    }
+                ]
+            , row [ Element.width Element.fill ]
+                [ Input.radioRow [ Element.spacing 10 ]
+                    { onChange = ChangeNewGameSettingTeam
+                    , selected = Just (teamToString model.newGameSettings.startingTeam)
+                    , label =
+                        Input.labelLeft
+                            [ Element.paddingEach
+                                { bottom = 0
+                                , left = 0
+                                , right = 5
+                                , top = 0
+                                }
+                            ]
+                            (text "Starting Team")
+                    , options =
+                        [ Input.option "Red" (text "Red")
+                        , Input.option "Blue" (text "Blue")
+                        ]
+                    }
+                ]
+            , row [ Element.width Element.fill ]
+                [ Input.button (viewButtonAttributes ++ [])
+                    { onPress = Just CreatingNewGame
+                    , label = text "Create Game"
+                    }
                 ]
             ]
-        
+        ]
 
 
 
