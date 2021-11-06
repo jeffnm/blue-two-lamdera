@@ -714,7 +714,7 @@ viewCreateUserForm model =
                 [ column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ] []
                 , column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ]
                     [ row [ Element.width Element.fill ]
-                        [ Input.text [ Element.spacing 5, onEnter NewUser, Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 400) ]
+                        [ Input.text [ Element.spacing 5, onEnter NewUser, Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 200) ]
                             { label = Input.labelLeft [] (text "Username")
                             , onChange = ChangeNewUserSettingUsername
                             , placeholder = Nothing
