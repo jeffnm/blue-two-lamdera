@@ -8,6 +8,7 @@ import Url exposing (Url)
 
 type alias FrontendModel =
     { key : Key
+    , url : Url
     , user : Maybe User
     , activeGame : Maybe Game
     , newGameSettings : NewGameSettings
@@ -19,11 +20,12 @@ type alias FrontendModel =
 type alias BackendModel =
     { games : List Game
     , words : List String
+    , sessions : List (SessionId, User)
     }
 
 
 type alias Game =
-    { id : Int
+    { id : String
     , users : List User
     , gridSize : GridSize
     , public : Bool
@@ -100,7 +102,7 @@ type FrontendMsg
     | CreatingNewGame
     | LeavingGame
     | LoadingGame
-    | JoiningGame Int
+    | JoiningGame String
     | ToggleNewGameSettingPublic Bool
     | ChangeNewGameSettingGridSize String
     | ChangeNewGameSettingTeam String
@@ -112,8 +114,9 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
+    | RegisterUserSession User
     | CreateNewGame NewGameSettings User
-    | JoinGame Int User
+    | JoinGame String User
     | LoadGame Game
     | LeaveGame Game User
     | GetPublicGames
@@ -126,8 +129,8 @@ type ToBackend
 type BackendMsg
     = NoOpBackendMsg
     | ShuffledWords (List String)
-    | ShuffledCardTeams (List CardAlignment)
-    | SendGameToPlayers Int
+    | ShuffledCardTeams Game (List CardAlignment)
+    | SendGameToPlayers String
     | ClientConnected SessionId ClientId
     | ClientDisconnected SessionId ClientId
 
@@ -137,4 +140,4 @@ type ToFrontend
     | PublicGames (List Game)
     | UserGames
     | ActiveGame Game
-    | ClientInfo SessionId ClientId
+    | ClientInfo SessionId ClientId (Maybe User)

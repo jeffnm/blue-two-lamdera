@@ -128,6 +128,6 @@ shuffleWords words =
     Random.generate ShuffledWords (Random.List.shuffle words)
 
 
-shuffleCardAlignments : List CardAlignment -> Cmd BackendMsg
-shuffleCardAlignments teams =
-    Random.generate ShuffledCardTeams (Random.List.shuffle teams)
+shuffleCardAlignments : List CardAlignment -> Game -> Cmd BackendMsg
+shuffleCardAlignments teams game =
+    Random.generate (ShuffledCardTeams game) (Random.List.shuffle teams)

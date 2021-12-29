@@ -11,13 +11,12 @@ import Element.Border as Border
 import Element.Events as Events exposing (onClick)
 import Element.Font as Font
 import Element.Input as Input
-import Html exposing (Html)
-import Html.Attributes as Attr exposing (name)
 import Html.Events
 import Json.Decode as Decode
-import Lamdera exposing (ClientId, SessionId, sendToBackend)
+import Lamdera exposing (ClientId, SessionId, sendToBackend, sendToFrontend)
 import Types exposing (..)
 import Url
+import Platform exposing (sendToSelf)
 
 
 
@@ -40,17 +39,31 @@ app =
         }
 
 
+lobbyURL =
+    Url.Url Url.Http "localhost" (Just 8000) "/lobby" Nothing Nothing
+
+
+landingURLtoGame : String -> Url.Url
+landingURLtoGame gameid =
+    Url.Url Url.Http "localhost" (Just 8000) "/landing" (Just gameid) Nothing
+
+
+landingURL =
+    Url.Url Url.Http "localhost" (Just 8000) "/landing" Nothing Nothing
+
+
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
     -- TODO: Generate a stub URL for each game to use as ID and access URL
     ( { key = key
+      , url = landingURL
       , user = Nothing
       , activeGame = Nothing
       , newGameSettings = NewGameSettings True MediumGrid Blue
       , newUserSettings = NewUserSettings "" Blue Nothing Nothing
       , publicGames = []
       }
-    , sendToBackend GetPublicGames
+    , Cmd.batch [ sendToBackend GetPublicGames, Nav.pushUrl key (Url.toString url) ]
     )
 
 
@@ -74,13 +87,86 @@ update msg model =
                     )
 
         UrlChanged url ->
-            ( model, Cmd.none )
+            case url.path of
+                "/landing" ->
+                    ( { model | url = url }, Cmd.none )
+
+                "/lobby" ->
+                    if model.user == Nothing then
+                        ( { model | url = landingURL }, Nav.pushUrl model.key (Url.toString landingURL) )
+
+                    else
+                        ( { model | url = url }, Cmd.none )
+
+                "/game" ->
+                    case url.query of
+                        Nothing ->
+                            ( { model | url = lobbyURL }, Nav.pushUrl model.key (Url.toString lobbyURL) )
+
+                        Just param ->
+                            case model.user of
+                                Nothing ->
+                                    -- Debug.todo "Make this URL keep the game ID parameter that needs to be used after a name is put in"
+                                    -- ( model, Nav.pushUrl model.key (Url.toString (landingURLtoGame param)) )
+                                    ({model | url = url}, Cmd.none)
+
+                                Just user ->
+                                    if String.startsWith "id=" param then
+                                        case model.activeGame of
+                                            Nothing ->
+                                                -- Debug.todo "figure out how to parse the query parameters and send it to sendToBackend JoinGame"
+                                                ( { model | url = url }
+                                                , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
+                                                )
+
+                                            Just game ->
+                                                if game.id == String.dropLeft 3 param then
+                                                    ( { model | url = url }, Cmd.none )
+
+                                                else
+                                                    ( { model | url = url }
+                                                    , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
+                                                    )
+
+                                    else
+                                        ( model, Nav.pushUrl model.key (Url.toString lobbyURL) )
+
+                _ ->
+                    case model.user of
+                        Just user ->
+                            if model.activeGame == Nothing then
+                                ( model, Nav.pushUrl model.key (Url.toString lobbyURL) )
+
+                            else
+                                ( model, Cmd.none )
+
+                        Nothing ->
+                            ( { model | url = landingURL }
+                            , Nav.pushUrl model.key (Url.toString landingURL)
+                            )
 
         NoOpFrontendMsg ->
             ( model, Cmd.none )
 
         NewUser ->
-            ( { model | user = Just (User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId) }, sendToBackend GetPublicGames )
+            let
+                newUser = User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId
+            in
+            
+            case model.url.query of
+                Nothing ->
+                    ( { model | user = Just newUser }
+                    , Cmd.batch [ 
+                        sendToBackend GetPublicGames
+                        , Nav.pushUrl model.key (Url.toString lobbyURL) ]
+                    )
+
+                Just param ->
+                    ( { model | user = Just newUser }
+                    , Cmd.batch [ sendToBackend GetPublicGames
+                    , Nav.pushUrl model.key ("/game?" ++ param)
+                    , sendToBackend (RegisterUserSession newUser) ]
+                    )
 
         CreatingNewGame ->
             case model.user of
@@ -88,7 +174,14 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just user ->
-                    ( model, sendToBackend (CreateNewGame model.newGameSettings user) )
+                    let
+                        -- Noone should be cluegiver immediately when creating a game
+                        u =
+                            { user | cluegiver = False }
+                    in
+                    ( { model | user = Just u }
+                    , sendToBackend (CreateNewGame model.newGameSettings user)
+                    )
 
         JoiningGame id ->
             case model.user of
@@ -96,7 +189,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just user ->
-                    ( model, sendToBackend (JoinGame id user) )
+                    ( model
+                    , Cmd.batch
+                        [ sendToBackend (JoinGame id user)
+                        , Nav.pushUrl model.key ("/game?id=" ++ id)
+                        ]
+                    )
 
         RevealingCard card ->
             case model.activeGame of
@@ -192,7 +290,13 @@ update msg model =
                             ( model, Cmd.none )
 
                         Just game ->
-                            ( { model | activeGame = Nothing }, Cmd.batch [ sendToBackend (LeaveGame game user), sendToBackend GetPublicGames ] )
+                            ( { model | activeGame = Nothing }
+                            , Cmd.batch
+                                [ sendToBackend (LeaveGame game user)
+                                , sendToBackend GetPublicGames
+                                , Nav.pushUrl model.key (Url.toString lobbyURL)
+                                ]
+                            )
 
         _ ->
             -- Debug.todo "Finish FrontendMsg updates"
@@ -205,11 +309,21 @@ updateFromBackend msg model =
         NoOpToFrontend ->
             ( model, Cmd.none )
 
-        ClientInfo sessionId clientId ->
-            ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }, Cmd.none )
+        ClientInfo sessionId clientId maybeuser ->
+           -- (model, Cmd.none)
+            case maybeuser of
+                Nothing ->
+                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }, Cmd.none )
+
+                Just user ->
+                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId, user = Just user }, Cmd.batch[Nav.pushUrl model.key (Url.toString model.url)])
 
         ActiveGame game ->
-            ( { model | activeGame = Just game }, Cmd.none )
+            ( { model | activeGame = Just game }
+            , Cmd.batch
+                [ Nav.pushUrl model.key ("/game?id=" ++ game.id)
+                ]
+            )
 
         PublicGames publicGames ->
             ( { model | publicGames = publicGames }, Cmd.none )
@@ -412,7 +526,7 @@ onEnter msg =
 
 
 
--- VIEW
+-- )VIEW
 
 
 view : Model -> Browser.Document FrontendMsg
@@ -440,7 +554,7 @@ viewSwitch model =
 
 viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model ]
+    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, el [] (text (Url.toString model.url)) ]
 
 
 viewLobby : Model -> Element FrontendMsg
@@ -461,11 +575,12 @@ viewLobby model =
                     [ el [] (text ("Welcome " ++ getUsername model.user)) ]
                 , Element.wrappedRow [ Element.alignLeft, Element.width Element.fill ]
                     [ viewCreateGameForm model
-                    , viewPublicGames model
+                    -- , viewPublicGames model
                     ]
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
+        , el [] (text (Url.toString model.url))
         ]
 
 
@@ -513,7 +628,7 @@ viewPublicGames model =
     column [ Element.width (Element.fillPortion 1) ]
         (row [] [ el [ Element.paddingXY 0 20 ] (text "Public Games") ]
             :: List.map
-                (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5 ] [ el [] (text ("Game " ++ String.fromInt g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
+                (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5 ] [ el [] (text ("Game " ++ g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
                 publicGames
         )
 

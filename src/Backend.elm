@@ -1,6 +1,7 @@
 module Backend exposing (..)
 
 import Cards exposing (generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
+import Hashids exposing (..)
 import Lamdera exposing (ClientId, SessionId, clientConnected_, onConnect, sendToBackend, sendToFrontend)
 import Types exposing (..)
 import Words exposing (words)
@@ -27,6 +28,7 @@ init : ( Model, Cmd BackendMsg )
 init =
     ( { games = []
       , words = words
+      , sessions = []
       }
     , shuffleWords words
     )
@@ -55,30 +57,26 @@ update msg model =
             ( model, Cmd.none )
 
         ClientConnected sessionId clientId ->
-            ( model, sendToFrontend clientId (ClientInfo sessionId clientId) )
+            -- Debug.todo "Check if the session is already active, and if so, send the user information to the client"
+            ( model, sendToFrontend clientId (ClientInfo sessionId clientId (getSessionInfo sessionId model.sessions)) )
 
         ClientDisconnected sessionId clientId ->
-            -- TODO: Let's remove the user from all games when they disconnect, rather than removing sessionID and clientID - the username is really just a friendly name, not an account for auth.
-            removeSessionAndClientIdsFromUserInAllGames model sessionId clientId
+            cleanupSessionsAndGames model sessionId clientId
 
         ShuffledWords words ->
             ( { model | words = words }, Cmd.none )
 
-        ShuffledCardTeams teams ->
+        ShuffledCardTeams game teams ->
             let
-                newGame =
-                    findGame (List.length model.games) model.games
+                updatedGame =
+                    updateGame model.games (replaceGameCards (generateCards (generateWords (List.length teams) model.words) teams) game)
             in
-            case newGame of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just game ->
-                    let
-                        updatedGame =
-                            updateGame model.games (replaceGameCards (generateCards (generateWords (List.length teams) model.words) teams) game)
-                    in
-                    ( { model | games = updatedGame }, Cmd.batch [ shuffleWords model.words, sendUpdatedGameToPlayers game.id updatedGame ] )
+            ( { model | games = updatedGame }
+            , Cmd.batch
+                [ shuffleWords model.words
+                , sendUpdatedGameToPlayers game.id updatedGame
+                ]
+            )
 
         SendGameToPlayers id ->
             ( model, sendUpdatedGameToPlayers id model.games )
@@ -90,6 +88,13 @@ updateFromFrontend sessionId clientId msg model =
         NoOpToBackend ->
             ( model, Cmd.none )
 
+        RegisterUserSession user ->
+            let
+                newSession = (sessionId, user)
+            in
+            
+            ({model | sessions = model.sessions ++ [newSession]}, Cmd.none)
+
         CreateNewGame newGameSettings user ->
             let
                 game =
@@ -98,7 +103,7 @@ updateFromFrontend sessionId clientId msg model =
                 teams =
                     pickTeams newGameSettings.gridSize newGameSettings.startingTeam
             in
-            ( { model | games = model.games ++ [ game ] }, shuffleCardAlignments teams )
+            ( { model | games = model.games ++ [ game ] }, shuffleCardAlignments teams game )
 
         GetPublicGames ->
             ( model, sendToFrontend clientId (PublicGames (List.filter (\g -> g.public) model.games)) )
@@ -123,7 +128,12 @@ updateFromFrontend sessionId clientId msg model =
                                     game
                             in
                             --update the games in the model and let the joiner load the game
-                            ( { model | games = games }, Cmd.batch [ sendUpdatedGameToPlayers activeGame.id games, sendToFrontend clientId (ActiveGame activeGame) ] )
+                            ( { model | games = games }
+                            , Cmd.batch
+                                [ sendUpdatedGameToPlayers activeGame.id games
+                                , sendToFrontend clientId (ActiveGame activeGame)
+                                ]
+                            )
 
         ChangeUserTeam game user ->
             let
@@ -190,11 +200,25 @@ updateFromFrontend sessionId clientId msg model =
 -- UTILITIES
 
 
+hash =
+    createHashidsContext "a salt for a clue" 5 "0123456789abcdefghijk"
+
+
+generateId : List Int -> String
+generateId ints =
+    encodeList hash ints
+
+
+decodeId : String -> List Int
+decodeId hashids =
+    decode hash hashids
+
+
 generateGame : Model -> NewGameSettings -> User -> Game
 generateGame model settings user =
     let
         newId =
-            List.length model.games + 1
+            generateId ((List.length model.games + 1) :: [ String.length user.name ])
 
         status =
             getGameStatusFromStartingTeam settings.startingTeam
@@ -206,7 +230,7 @@ generateGame model settings user =
 -- (generateCards settings.gridSize settings.startingTeam)
 
 
-joinGame : Int -> User -> List Game -> Maybe (List Game)
+joinGame : String -> User -> List Game -> Maybe (List Game)
 joinGame id user games =
     case findGame id games of
         Nothing ->
@@ -218,7 +242,7 @@ joinGame id user games =
                 |> Just
 
 
-findGame : Int -> List Game -> Maybe Game
+findGame : String -> List Game -> Maybe Game
 findGame id games =
     List.filter (\g -> g.id == id) games
         |> List.head
@@ -290,7 +314,7 @@ updateGameStatus status game =
     { game | gameStatus = status }
 
 
-sendUpdatedGameToPlayers : Int -> List Game -> Cmd msg
+sendUpdatedGameToPlayers : String -> List Game -> Cmd msg
 sendUpdatedGameToPlayers gameId games =
     case findGame gameId games of
         Nothing ->
@@ -300,18 +324,43 @@ sendUpdatedGameToPlayers gameId games =
             Cmd.batch <| List.map (\u -> sendToFrontend u (ActiveGame game)) (getClientIdsFromUsers game.users)
 
 
-removeSessionAndClientIdsFromUserInAllGames : Model -> SessionId -> ClientId -> ( Model, Cmd msg )
+sessionExists : SessionId -> List ( SessionId, User ) -> Bool
+sessionExists sessionId sessions =
+    if (List.length <| List.filter (\( id, _ ) -> id == sessionId) sessions) > 0 then
+        True
+
+    else
+        False
+
+
+getSessionInfo : SessionId -> List ( SessionId, User ) -> Maybe User
+getSessionInfo sessionId sessions =
+    -- List.length sessions
+    List.filter (\( id, _ ) -> id == sessionId) sessions
+        |> List.map (\( _, user ) -> user)
+        |> List.head
+
+
+removeSessionAndClientIdsFromUserInAllGames : Model -> SessionId -> ClientId -> List Game
 removeSessionAndClientIdsFromUserInAllGames model sessionId clientId =
     -- It might be a bad id to have maybe sessionids and maybe clientids - perhaps we should simply remove users when they disconnect
+    List.map
+        (\g ->
+            removeSessionIdAndClientIdFromUserInOneGame g sessionId clientId
+        )
+        model.games
+
+
+cleanupSessionsAndGames : Model -> SessionId -> ClientId -> ( Model, Cmd msg )
+cleanupSessionsAndGames model sessionId clientId =
     let
         newGames =
-            List.map
-                (\g ->
-                    removeSessionIdAndClientIdFromUserInOneGame g sessionId clientId
-                )
-                model.games
+            removeSessionAndClientIdsFromUserInAllGames model sessionId clientId
+
+        newSessions =
+            List.filter (\( id, _ ) -> id /= sessionId) model.sessions
     in
-    ( { model | games = newGames }, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
+    ( { model | games = newGames , sessions = newSessions}, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
 
 
 removeSessionIdAndClientIdFromUserInOneGame : Game -> SessionId -> ClientId -> Game
