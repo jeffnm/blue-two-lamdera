@@ -526,7 +526,7 @@ onEnter msg =
 
 
 
--- )VIEW
+-- VIEW
 
 
 view : Model -> Browser.Document FrontendMsg
