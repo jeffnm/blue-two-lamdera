@@ -16,7 +16,7 @@ import Json.Decode as Decode
 import Lamdera exposing (ClientId, SessionId, sendToBackend, sendToFrontend)
 import Types exposing (..)
 import Url
-import Platform exposing (sendToSelf)
+import Env 
 
 
 
@@ -39,17 +39,18 @@ app =
         }
 
 
+
 lobbyURL =
-    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/lobby" Nothing Nothing
+    Url.Url Env.protocol Env.host Env.urlport "/lobby" Nothing Nothing
 
 
 landingURLtoGame : String -> Url.Url
 landingURLtoGame gameid =
-    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/landing" (Just gameid) Nothing
+    Url.Url Env.protocol Env.host Env.urlport  "/landing" (Just gameid) Nothing
 
 
 landingURL =
-    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/landing" Nothing Nothing
+    Url.Url Env.protocol Env.host Env.urlport "/landing" Nothing Nothing
 
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
@@ -554,7 +555,10 @@ viewSwitch model =
 
 viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, el [] (text (Url.toString model.url)) ]
+    if Env.mode == Env.Development then
+        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, el [] (text (Url.toString model.url)) ]
+    else
+        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model]
 
 
 viewLobby : Model -> Element FrontendMsg
@@ -580,7 +584,9 @@ viewLobby model =
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , el [] (text (Url.toString model.url))
+        , if Env.mode == Env.Development then el [] (text (Url.toString model.url))
+            else 
+            el [](text "")
         ]
 
 
