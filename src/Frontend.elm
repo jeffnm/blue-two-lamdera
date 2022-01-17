@@ -40,16 +40,16 @@ app =
 
 
 lobbyURL =
-    Url.Url Url.Http "blue-two-lamdera.lamdera.app" Nothing "/lobby" Nothing Nothing
+    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/lobby" Nothing Nothing
 
 
 landingURLtoGame : String -> Url.Url
 landingURLtoGame gameid =
-    Url.Url Url.Http "blue-two-lamdera.lamdera.app" Nothing "/landing" (Just gameid) Nothing
+    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/landing" (Just gameid) Nothing
 
 
 landingURL =
-    Url.Url Url.Http "blue-two-lamdera.lamdera.app" Nothing "/landing" Nothing Nothing
+    Url.Url Url.Https "blue-two-lamdera.lamdera.app" Nothing "/landing" Nothing Nothing
 
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
