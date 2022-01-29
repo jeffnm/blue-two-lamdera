@@ -90,10 +90,10 @@ updateFromFrontend sessionId clientId msg model =
 
         RegisterUserSession user ->
             let
-                newSession = (sessionId, user)
+                newSession =
+                    ( sessionId, user )
             in
-            
-            ({model | sessions = model.sessions ++ [newSession]}, Cmd.none)
+            ( { model | sessions = model.sessions ++ [ newSession ] }, Cmd.none )
 
         CreateNewGame newGameSettings user ->
             let
@@ -104,9 +104,6 @@ updateFromFrontend sessionId clientId msg model =
                     pickTeams newGameSettings.gridSize newGameSettings.startingTeam
             in
             ( { model | games = model.games ++ [ game ] }, shuffleCardAlignments teams game )
-
-        GetPublicGames ->
-            ( model, sendToFrontend clientId (PublicGames (List.filter (\g -> g.public) model.games)) )
 
         JoinGame id user ->
             -- Join the user to the game
@@ -223,7 +220,7 @@ generateGame model settings user =
         status =
             getGameStatusFromStartingTeam settings.startingTeam
     in
-    Game newId [ user ] settings.gridSize settings.public [] status [] []
+    Game newId [ user ] settings.gridSize [] status [] []
 
 
 
@@ -360,7 +357,7 @@ cleanupSessionsAndGames model sessionId clientId =
         newSessions =
             List.filter (\( id, _ ) -> id /= sessionId) model.sessions
     in
-    ( { model | games = newGames , sessions = newSessions}, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
+    ( { model | games = newGames, sessions = newSessions }, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
 
 
 removeSessionIdAndClientIdFromUserInOneGame : Game -> SessionId -> ClientId -> Game

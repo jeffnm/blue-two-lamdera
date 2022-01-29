@@ -13,14 +13,13 @@ type alias FrontendModel =
     , activeGame : Maybe Game
     , newGameSettings : NewGameSettings
     , newUserSettings : NewUserSettings
-    , publicGames : List Game
     }
 
 
 type alias BackendModel =
     { games : List Game
     , words : List String
-    , sessions : List (SessionId, User)
+    , sessions : List ( SessionId, User )
     }
 
 
@@ -28,7 +27,6 @@ type alias Game =
     { id : String
     , users : List User
     , gridSize : GridSize
-    , public : Bool
     , cards : List Card
     , gameStatus : GameStatus
     , words : List String
@@ -45,8 +43,7 @@ type alias NewUserSettings =
 
 
 type alias NewGameSettings =
-    { public : Bool
-    , gridSize : GridSize
+    { gridSize : GridSize
     , startingTeam : Team
     }
 
@@ -103,7 +100,6 @@ type FrontendMsg
     | LeavingGame
     | LoadingGame
     | JoiningGame String
-    | ToggleNewGameSettingPublic Bool
     | ChangeNewGameSettingGridSize String
     | ChangeNewGameSettingTeam String
     | RevealingCard Card
@@ -119,7 +115,6 @@ type ToBackend
     | JoinGame String User
     | LoadGame Game
     | LeaveGame Game User
-    | GetPublicGames
     | ChangeCardRevealedState Card Game
     | EndTurn Game GameStatus
     | ChangeUserTeam Game User
@@ -137,7 +132,6 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | PublicGames (List Game)
     | UserGames
     | ActiveGame Game
     | ClientInfo SessionId ClientId (Maybe User)

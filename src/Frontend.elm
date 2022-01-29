@@ -11,12 +11,12 @@ import Element.Border as Border
 import Element.Events as Events exposing (onClick)
 import Element.Font as Font
 import Element.Input as Input
+import Env
 import Html.Events
 import Json.Decode as Decode
 import Lamdera exposing (ClientId, SessionId, sendToBackend, sendToFrontend)
 import Types exposing (..)
 import Url
-import Env 
 
 
 
@@ -39,14 +39,13 @@ app =
         }
 
 
-
 lobbyURL =
     Url.Url Env.protocol Env.host Env.urlport "/lobby" Nothing Nothing
 
 
 landingURLtoGame : String -> Url.Url
 landingURLtoGame gameid =
-    Url.Url Env.protocol Env.host Env.urlport  "/landing" (Just gameid) Nothing
+    Url.Url Env.protocol Env.host Env.urlport "/landing" (Just gameid) Nothing
 
 
 landingURL =
@@ -60,11 +59,10 @@ init url key =
       , url = landingURL
       , user = Nothing
       , activeGame = Nothing
-      , newGameSettings = NewGameSettings True MediumGrid Blue
+      , newGameSettings = NewGameSettings MediumGrid Blue
       , newUserSettings = NewUserSettings "" Blue Nothing Nothing
-      , publicGames = []
       }
-    , Cmd.batch [ sendToBackend GetPublicGames, Nav.pushUrl key (Url.toString url) ]
+    , Cmd.batch [ Nav.pushUrl key (Url.toString url) ]
     )
 
 
@@ -109,7 +107,7 @@ update msg model =
                                 Nothing ->
                                     -- Debug.todo "Make this URL keep the game ID parameter that needs to be used after a name is put in"
                                     -- ( model, Nav.pushUrl model.key (Url.toString (landingURLtoGame param)) )
-                                    ({model | url = url}, Cmd.none)
+                                    ( { model | url = url }, Cmd.none )
 
                                 Just user ->
                                     if String.startsWith "id=" param then
@@ -151,22 +149,23 @@ update msg model =
 
         NewUser ->
             let
-                newUser = User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId
+                newUser =
+                    User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId
             in
-            
             case model.url.query of
                 Nothing ->
                     ( { model | user = Just newUser }
-                    , Cmd.batch [ 
-                        sendToBackend GetPublicGames
-                        , Nav.pushUrl model.key (Url.toString lobbyURL) ]
+                    , Cmd.batch
+                        [ Nav.pushUrl model.key (Url.toString lobbyURL)
+                        ]
                     )
 
                 Just param ->
                     ( { model | user = Just newUser }
-                    , Cmd.batch [ sendToBackend GetPublicGames
-                    , Nav.pushUrl model.key ("/game?" ++ param)
-                    , sendToBackend (RegisterUserSession newUser) ]
+                    , Cmd.batch
+                        [ Nav.pushUrl model.key ("/game?" ++ param)
+                        , sendToBackend (RegisterUserSession newUser)
+                        ]
                     )
 
         CreatingNewGame ->
@@ -265,9 +264,6 @@ update msg model =
                         Just game ->
                             ( { model | user = Just (toggleTeam user) }, sendToBackend (ChangeUserTeam game (toggleTeam user)) )
 
-        ToggleNewGameSettingPublic value ->
-            ( { model | newGameSettings = toggleNewGameSettingPublic model.newGameSettings value }, Cmd.none )
-
         ChangeNewGameSettingGridSize gridSize ->
             ( { model | newGameSettings = setNewGameSettingGridSize model.newGameSettings gridSize }, Cmd.none )
 
@@ -294,7 +290,6 @@ update msg model =
                             ( { model | activeGame = Nothing }
                             , Cmd.batch
                                 [ sendToBackend (LeaveGame game user)
-                                , sendToBackend GetPublicGames
                                 , Nav.pushUrl model.key (Url.toString lobbyURL)
                                 ]
                             )
@@ -311,13 +306,13 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
         ClientInfo sessionId clientId maybeuser ->
-           -- (model, Cmd.none)
+            -- (model, Cmd.none)
             case maybeuser of
                 Nothing ->
                     ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }, Cmd.none )
 
                 Just user ->
-                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId, user = Just user }, Cmd.batch[Nav.pushUrl model.key (Url.toString model.url)])
+                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId, user = Just user }, Cmd.batch [ Nav.pushUrl model.key (Url.toString model.url) ] )
 
         ActiveGame game ->
             ( { model | activeGame = Just game }
@@ -325,9 +320,6 @@ updateFromBackend msg model =
                 [ Nav.pushUrl model.key ("/game?id=" ++ game.id)
                 ]
             )
-
-        PublicGames publicGames ->
-            ( { model | publicGames = publicGames }, Cmd.none )
 
         _ ->
             -- Debug.todo "Implement other branches"
@@ -380,11 +372,6 @@ isItUsersTurn team turn =
 
         _ ->
             False
-
-
-toggleNewGameSettingPublic : NewGameSettings -> Bool -> NewGameSettings
-toggleNewGameSettingPublic oldSettings public =
-    { oldSettings | public = public }
 
 
 toggleClueGiver : User -> Bool -> User
@@ -557,8 +544,9 @@ viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
     if Env.mode == Env.Development then
         column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, el [] (text (Url.toString model.url)) ]
+
     else
-        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model]
+        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model ]
 
 
 viewLobby : Model -> Element FrontendMsg
@@ -579,14 +567,17 @@ viewLobby model =
                     [ el [] (text ("Welcome " ++ getUsername model.user)) ]
                 , Element.wrappedRow [ Element.alignLeft, Element.width Element.fill ]
                     [ viewCreateGameForm model
+
                     -- , viewPublicGames model
                     ]
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , if Env.mode == Env.Development then el [] (text (Url.toString model.url))
-            else 
-            el [](text "")
+        , if Env.mode == Env.Development then
+            el [] (text (Url.toString model.url))
+
+          else
+            el [] (text "")
         ]
 
 
@@ -623,20 +614,6 @@ viewGame game user =
 
         BlueTurn ->
             viewGamePlaying game user
-
-
-viewPublicGames : Model -> Element FrontendMsg
-viewPublicGames model =
-    let
-        publicGames =
-            List.filter (\g -> g.gameStatus /= RedWon && g.gameStatus /= BlueWon) model.publicGames
-    in
-    column [ Element.width (Element.fillPortion 1) ]
-        (row [] [ el [ Element.paddingXY 0 20 ] (text "Public Games") ]
-            :: List.map
-                (\g -> row [ Element.width (Element.fill |> Element.minimum 200), Element.spacing 10, Element.padding 5 ] [ el [] (text ("Game " ++ g.id)), Input.button (viewButtonAttributes ++ [ Element.alignLeft ]) { onPress = Just (JoiningGame g.id), label = text "Join" } ])
-                publicGames
-        )
 
 
 viewGameHeader : Game -> User -> Element FrontendMsg
@@ -872,23 +849,6 @@ viewCreateGameForm model =
         [ el [ Element.paddingXY 0 20 ] (text "Create a new game")
         , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
             [ row [ Element.width Element.fill ]
-                [ Input.checkbox []
-                    { onChange = ToggleNewGameSettingPublic
-                    , icon = Input.defaultCheckbox
-                    , checked = model.newGameSettings.public
-                    , label =
-                        Input.labelRight
-                            [ Element.paddingEach
-                                { left = 10
-                                , bottom = 0
-                                , right = 0
-                                , top = 0
-                                }
-                            ]
-                            (text "Make game public")
-                    }
-                ]
-            , row [ Element.width Element.fill ]
                 [ Input.radioRow [ Element.spacing 10 ]
                     { onChange = ChangeNewGameSettingGridSize
                     , selected = Just (gridSizeToString model.newGameSettings.gridSize)

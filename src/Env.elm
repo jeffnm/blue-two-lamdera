@@ -1,33 +1,39 @@
 module Env exposing (..)
+
 import Url
+
+
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 
 dummyConfigItem =
-  ""
+    ""
+
 
 protocol =
-  case mode of
-    Production ->
-      Url.Https
+    case mode of
+        Production ->
+            Url.Https
 
-    Development ->
-      Url.Http
+        Development ->
+            Url.Http
 
-host = 
-  case mode of
-    Production ->
-        "blue-two-lamdera.lamdera.app"
 
-    Development ->
-      "localhost"
+host =
+    case mode of
+        Production ->
+            "blue-two-lamdera.lamdera.app"
 
-urlport = 
-  case mode of
-    Production ->
-      Nothing
+        Development ->
+            "localhost"
 
-    Development ->
-      Just 8000
+
+urlport =
+    case mode of
+        Production ->
+            Nothing
+
+        Development ->
+            Just 8000
