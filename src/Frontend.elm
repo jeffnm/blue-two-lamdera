@@ -542,11 +542,7 @@ viewSwitch model =
 
 viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    if Env.mode == Env.Development then
-        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, el [] (text (Url.toString model.url)) ]
-
-    else
-        column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model ]
+    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url ]
 
 
 viewLobby : Model -> Element FrontendMsg
@@ -573,12 +569,18 @@ viewLobby model =
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , if Env.mode == Env.Development then
-            el [] (text (Url.toString model.url))
-
-          else
-            el [] (text "")
+        , viewDevelopmentFooter model.url
         ]
+
+
+viewDevelopmentFooter : Url.Url -> Element FrontendMsg
+viewDevelopmentFooter url =
+    -- Env is injected by Lamdera at runtime, so the elm tools error here can be ignored
+    if Env.mode == Env.Development then
+        el [] (text (Url.toString url))
+
+    else
+        el [] (text "")
 
 
 viewGame : Game -> User -> Element FrontendMsg
