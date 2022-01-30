@@ -3,6 +3,9 @@ module Backend exposing (..)
 import Cards exposing (generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
 import Hashids exposing (..)
 import Lamdera exposing (ClientId, SessionId, clientConnected_, onConnect, sendToBackend, sendToFrontend)
+import Task
+import Time
+import Time.Extra as Time
 import Types exposing (..)
 import Words exposing (words)
 
@@ -41,7 +44,7 @@ init =
 subscriptions : Model -> Sub BackendMsg
 subscriptions model =
     Sub.batch
-        [ Lamdera.onConnect ClientConnected
+        [ Lamdera.onConnect CheckSession
         , Lamdera.onDisconnect ClientDisconnected
         ]
 
@@ -56,12 +59,45 @@ update msg model =
         NoOpBackendMsg ->
             ( model, Cmd.none )
 
+        CheckSession sid cid ->
+            model.sessions
+                |> getSessionInfo sid
+                |> Maybe.map (\user -> ( model, sendToFrontend cid (ClientInfo sid cid (Just { user | clientId = Just cid })) ))
+                |> Maybe.withDefault ( model, sendToFrontend cid (ClientInfo sid cid Nothing) )
+
+        RenewSession uid sid cid now ->
+            let
+                updatedSession =
+                    model.sessions
+                        |> List.filter (\( s, _ ) -> s == sid)
+                        |> List.map (\( s, sd ) -> ( s, { user = sd.user, expires = now |> Time.add Time.Hour 1 Time.utc } ))
+
+                newSessions =
+                    model.sessions
+                        |> List.filter (\( s, _ ) -> s /= sid)
+                        |> List.append updatedSession
+            in
+            ( { model | sessions = newSessions }, Time.now |> Task.perform (always (CheckSession sid cid)) )
+
+        RegisterUserSession user sessionId clientId now ->
+            let
+                newSession =
+                    ( sessionId, Session user (now |> Time.add Time.Hour 1 Time.utc) )
+            in
+            ( { model | sessions = model.sessions ++ [ newSession ] }, Cmd.batch [ Time.now |> Task.perform CleanUpSessions, Time.now |> Task.perform (always CleanUpGames) ] )
+
+        CleanUpSessions now ->
+            cleanupSessions model now
+
+        CleanUpGames ->
+            cleanupGames model
+
         ClientConnected sessionId clientId ->
             -- Debug.todo "Check if the session is already active, and if so, send the user information to the client"
             ( model, sendToFrontend clientId (ClientInfo sessionId clientId (getSessionInfo sessionId model.sessions)) )
 
         ClientDisconnected sessionId clientId ->
-            cleanupSessionsAndGames model sessionId clientId
+            ( model, Cmd.batch [ Time.now |> Task.perform CleanUpSessions, Time.now |> Task.perform (always CleanUpGames) ] )
 
         ShuffledWords words ->
             ( { model | words = words }, Cmd.none )
@@ -88,12 +124,8 @@ updateFromFrontend sessionId clientId msg model =
         NoOpToBackend ->
             ( model, Cmd.none )
 
-        RegisterUserSession user ->
-            let
-                newSession =
-                    ( sessionId, user )
-            in
-            ( { model | sessions = model.sessions ++ [ newSession ] }, Cmd.none )
+        RegisterUser user ->
+            ( model, Time.now |> Task.perform (RegisterUserSession user sessionId clientId) )
 
         CreateNewGame newGameSettings user ->
             let
@@ -103,7 +135,7 @@ updateFromFrontend sessionId clientId msg model =
                 teams =
                     pickTeams newGameSettings.gridSize newGameSettings.startingTeam
             in
-            ( { model | games = model.games ++ [ game ] }, shuffleCardAlignments teams game )
+            ( { model | games = model.games ++ [ game ] }, Cmd.batch [ shuffleCardAlignments teams game, renewSession user sessionId clientId ] )
 
         JoinGame id user ->
             -- Join the user to the game
@@ -129,6 +161,7 @@ updateFromFrontend sessionId clientId msg model =
                             , Cmd.batch
                                 [ sendUpdatedGameToPlayers activeGame.id games
                                 , sendToFrontend clientId (ActiveGame activeGame)
+                                , renewSession user sessionId clientId
                                 ]
                             )
 
@@ -191,9 +224,15 @@ updateFromFrontend sessionId clientId msg model =
             let
                 newGame =
                     updateGameRemoveUser user game
-                        |> updateGame model.games
+
+                gamesList =
+                    if checkThatGameHasUsers newGame then
+                        updateGame model.games newGame
+
+                    else
+                        removeGame model.games newGame
             in
-            ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
+            ( { model | games = gamesList }, sendUpdatedGameToPlayers game.id gamesList )
 
         LoadGame game ->
             ( model, sendUpdatedGameToPlayers game.id model.games )
@@ -289,6 +328,11 @@ addUserToGame user game =
         { game | users = game.users ++ [ user ] }
 
 
+removeGame : List Game -> Game -> List Game
+removeGame games oldgame =
+    List.filter (\g -> g.id /= oldgame.id) games
+
+
 updateGame : List Game -> Game -> List Game
 updateGame games newgame =
     List.map
@@ -307,6 +351,15 @@ updateGameCard card game =
     { game | cards = updateCard card game.cards }
 
 
+checkThatGameHasUsers : Game -> Bool
+checkThatGameHasUsers game =
+    if List.isEmpty game.users then
+        False
+
+    else
+        True
+
+
 replaceGameCards : List Card -> Game -> Game
 replaceGameCards cards game =
     { game | cards = cards }
@@ -321,7 +374,7 @@ updateGameRemoveUser : User -> Game -> Game
 updateGameRemoveUser user game =
     let
         newusers =
-            List.filter (\u -> u /= user) game.users
+            List.filter (\u -> u.name /= user.name) game.users
     in
     { game | users = newusers }
 
@@ -336,6 +389,10 @@ sendUpdatedGameToPlayers gameId games =
             Cmd.batch <| List.map (\u -> sendToFrontend u (ActiveGame game)) (getClientIdsFromUsers game.users)
 
 
+renewSession user sid cid =
+    Time.now |> Task.perform (RenewSession user sid cid)
+
+
 sessionExists : SessionId -> List ( SessionId, User ) -> Bool
 sessionExists sessionId sessions =
     if (List.length <| List.filter (\( id, _ ) -> id == sessionId) sessions) > 0 then
@@ -345,11 +402,11 @@ sessionExists sessionId sessions =
         False
 
 
-getSessionInfo : SessionId -> List ( SessionId, User ) -> Maybe User
+getSessionInfo : SessionId -> List ( SessionId, Session ) -> Maybe User
 getSessionInfo sessionId sessions =
     -- List.length sessions
     List.filter (\( id, _ ) -> id == sessionId) sessions
-        |> List.map (\( _, user ) -> user)
+        |> List.map (\( _, s ) -> s.user)
         |> List.head
 
 
@@ -358,43 +415,109 @@ removeSessionAndClientIdsFromUserInAllGames model sessionId clientId =
     -- It might be a bad id to have maybe sessionids and maybe clientids - perhaps we should simply remove users when they disconnect
     List.map
         (\g ->
-            removeSessionIdAndClientIdFromUserInOneGame g sessionId clientId
+            updateGameRemoveUserBySessionId g sessionId
         )
         model.games
 
 
-cleanupSessionsAndGames : Model -> SessionId -> ClientId -> ( Model, Cmd msg )
-cleanupSessionsAndGames model sessionId clientId =
+updateGameRemoveUserBySessionId : Game -> SessionId -> Game
+updateGameRemoveUserBySessionId game sessionId =
+    { game
+        | users =
+            game.users
+                |> List.filter
+                    (\u ->
+                        case u.sessionId of
+                            Nothing ->
+                                False
+
+                            Just s ->
+                                if s /= sessionId then
+                                    True
+
+                                else
+                                    False
+                    )
+    }
+
+
+cleanupSessions : Model -> Time.Posix -> ( Model, Cmd msg )
+cleanupSessions model now =
+    let
+        newSessions =
+            List.filter (\( id, session ) -> Time.posixToMillis session.expires > Time.posixToMillis now) model.sessions
+    in
+    -- ( { model | sessions = newSessions }, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
+    ( { model | sessions = newSessions }, Cmd.none )
+
+
+cleanupGames : Model -> ( Model, Cmd msg )
+cleanupGames model =
     let
         newGames =
-            removeSessionAndClientIdsFromUserInAllGames model sessionId clientId
+            model.games
+                |> List.concatMap
+                    (\g ->
+                        List.map
+                            (\u ->
+                                case u.sessionId of
+                                    Nothing ->
+                                        updateGameRemoveUser u g
 
-        newSessions =
-            List.filter (\( id, _ ) -> id /= sessionId) model.sessions
+                                    Just sid ->
+                                        if List.member sid sessionIdsInGamesWithActiveSessions then
+                                            g
+
+                                        else
+                                            updateGameRemoveUserBySessionId g sid
+                            )
+                            g.users
+                    )
+                |> List.filter (\g -> List.length g.users > 0)
+
+        allUsersInGames =
+            model.games
+                |> List.concatMap (\g -> g.users)
+
+        allUserSessionIds =
+            allUsersInGames
+                |> List.map
+                    (\u ->
+                        case u.sessionId of
+                            Nothing ->
+                                ""
+
+                            Just sid ->
+                                sid
+                    )
+
+        sessionIdsInGamesWithActiveSessions =
+            model.sessions
+                |> List.filter (\( sid, session ) -> List.member sid allUserSessionIds)
+                |> List.map (\( sid, session ) -> sid)
     in
-    ( { model | games = newGames, sessions = newSessions }, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
+    ( { model | games = newGames }, Cmd.none )
 
 
-removeSessionIdAndClientIdFromUserInOneGame : Game -> SessionId -> ClientId -> Game
-removeSessionIdAndClientIdFromUserInOneGame game sessionId clientId =
-    let
-        newUsers =
-            List.map
-                (\u ->
-                    case u.clientId of
-                        Nothing ->
-                            u
 
-                        Just c ->
-                            if c == clientId then
-                                { u | clientId = Nothing, sessionId = Nothing }
-
-                            else
-                                u
-                )
-                game.users
-    in
-    { game | users = newUsers }
+-- removeSessionIdAndClientIdFromUserInOneGame : Game -> SessionId -> ClientId -> Game
+-- removeSessionIdAndClientIdFromUserInOneGame game sessionId clientId =
+--     let
+--         newUsers =
+--             List.map
+--                 (\u ->
+--                     case u.clientId of
+--                         Nothing ->
+--                             u
+--                         Just c ->
+--                             if c == clientId then
+--                                 { u | clientId = Nothing, sessionId = Nothing }
+--                             else
+--                                 u
+--                 )
+--                 game.users
+--     in
+--     { game | users = newUsers }
 
 
 getGameStatusFromStartingTeam : Team -> GameStatus

@@ -3,6 +3,7 @@ module Types exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Navigation exposing (Key)
 import Lamdera exposing (ClientId, SessionId)
+import Time
 import Url exposing (Url)
 
 
@@ -19,7 +20,13 @@ type alias FrontendModel =
 type alias BackendModel =
     { games : List Game
     , words : List String
-    , sessions : List ( SessionId, User )
+    , sessions : List ( SessionId, Session )
+    }
+
+
+type alias Session =
+    { user : User
+    , expires : Time.Posix
     }
 
 
@@ -110,7 +117,7 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
-    | RegisterUserSession User
+    | RegisterUser User
     | CreateNewGame NewGameSettings User
     | JoinGame String User
     | LoadGame Game
@@ -126,6 +133,11 @@ type BackendMsg
     | ShuffledWords (List String)
     | ShuffledCardTeams Game (List CardAlignment)
     | SendGameToPlayers String
+    | CheckSession SessionId ClientId
+    | RenewSession User SessionId ClientId Time.Posix
+    | RegisterUserSession User SessionId ClientId Time.Posix
+    | CleanUpGames
+    | CleanUpSessions Time.Posix
     | ClientConnected SessionId ClientId
     | ClientDisconnected SessionId ClientId
 

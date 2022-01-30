@@ -157,6 +157,7 @@ update msg model =
                     ( { model | user = Just newUser }
                     , Cmd.batch
                         [ Nav.pushUrl model.key (Url.toString lobbyURL)
+                        , sendToBackend (RegisterUser newUser)
                         ]
                     )
 
@@ -164,7 +165,7 @@ update msg model =
                     ( { model | user = Just newUser }
                     , Cmd.batch
                         [ Nav.pushUrl model.key ("/game?" ++ param)
-                        , sendToBackend (RegisterUserSession newUser)
+                        , sendToBackend (RegisterUser newUser)
                         ]
                     )
 
@@ -426,6 +427,21 @@ getUsername user =
             ""
 
 
+getUserSessionId : Maybe User -> String
+getUserSessionId user =
+    case user of
+        Just u ->
+            case u.sessionId of
+                Just sid ->
+                    sid
+
+                Nothing ->
+                    ""
+
+        Nothing ->
+            ""
+
+
 gridSizeFromString : String -> GridSize
 gridSizeFromString gridSize =
     case gridSize of
@@ -542,7 +558,7 @@ viewSwitch model =
 
 viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url ]
+    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url (getUserSessionId model.user) ]
 
 
 viewLobby : Model -> Element FrontendMsg
@@ -569,18 +585,23 @@ viewLobby model =
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , viewDevelopmentFooter model.url
+        , viewDevelopmentFooter model.url (getUserSessionId model.user)
         ]
 
 
-viewDevelopmentFooter : Url.Url -> Element FrontendMsg
-viewDevelopmentFooter url =
+viewDevelopmentFooter : Url.Url -> SessionId -> Element FrontendMsg
+viewDevelopmentFooter url sessionId =
     -- Env is injected by Lamdera at runtime, so the elm tools error here can be ignored
     if Env.mode == Env.Development then
-        el [] (text (Url.toString url))
+        row []
+            [ el [] (text (Url.toString url))
+            , el [] (text sessionId)
+            ]
 
     else
-        el [] (text "")
+        row []
+            [ el [] (text "")
+            ]
 
 
 viewGame : Game -> User -> Element FrontendMsg
@@ -848,7 +869,7 @@ viewCreateUserForm model =
 viewCreateGameForm : Model -> Element FrontendMsg
 viewCreateGameForm model =
     column [ Element.width (Element.fillPortion 3) ]
-        [ el [ Element.paddingXY 0 20 ] (text "Create a new game")
+        [ el [ Element.paddingXY 0 20 ] (text "Create a new game, then send the URL to your friends so they can join you.")
         , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
             [ row [ Element.width Element.fill ]
                 [ Input.radioRow [ Element.spacing 10 ]
