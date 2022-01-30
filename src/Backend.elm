@@ -187,10 +187,16 @@ updateFromFrontend sessionId clientId msg model =
                 Red ->
                     ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
 
-        -- Debug.todo "There needs to be a way to let all game.users know the game has changed"
-        _ ->
-            -- Debug.todo "Implement the other branches"
-            ( model, Cmd.none )
+        LeaveGame game user ->
+            let
+                newGame =
+                    updateGameRemoveUser user game
+                        |> updateGame model.games
+            in
+            ( { model | games = newGame }, sendUpdatedGameToPlayers game.id newGame )
+
+        LoadGame game ->
+            ( model, sendUpdatedGameToPlayers game.id model.games )
 
 
 
@@ -309,6 +315,15 @@ replaceGameCards cards game =
 updateGameStatus : GameStatus -> Game -> Game
 updateGameStatus status game =
     { game | gameStatus = status }
+
+
+updateGameRemoveUser : User -> Game -> Game
+updateGameRemoveUser user game =
+    let
+        newusers =
+            List.filter (\u -> u /= user) game.users
+    in
+    { game | users = newusers }
 
 
 sendUpdatedGameToPlayers : String -> List Game -> Cmd msg
