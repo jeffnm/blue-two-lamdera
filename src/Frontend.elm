@@ -610,23 +610,29 @@ viewGame game user =
 
         gameOver =
             viewGameBoardWrapper game.gridSize (viewCardsGameOver game.cards)
+
+        winColumn winningText =
+            column [ Element.width Element.fill ]
+                [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text winningText) ]
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
+                , gameOver
+                ]
     in
     case game.gameStatus of
         RedWon ->
-            column [ Element.width Element.fill ]
-                [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text "Red won!") ]
-                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
-                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
-                , gameOver
-                ]
+            if user.team == Red then
+                winColumn ("Red won! Congratulations " ++ user.name ++ "!")
+
+            else
+                winColumn ("Red won! Better luck next time, " ++ user.name ++ "!")
 
         BlueWon ->
-            column [ Element.width Element.fill ]
-                [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text "Blue won!") ]
-                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
-                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
-                , gameOver
-                ]
+            if user.team == Blue then
+                winColumn ("Blue won! Congratulations " ++ user.name ++ "!")
+
+            else
+                winColumn ("Blue won! Better luck next time, " ++ user.name ++ "!")
 
         RedTurn ->
             viewGamePlaying game user
