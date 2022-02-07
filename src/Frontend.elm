@@ -4,17 +4,17 @@ module Frontend exposing (..)
 
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
-import Cards exposing (cardCardAlignmentToRgb, cardCardAlignmentToString)
-import Element as Element exposing (Element, centerX, column, el, paddingEach, rgb, row, text, width)
+import Cards exposing (cardCardAlignmentToRgb)
+import Element as Element exposing (Element, centerX, column, el, rgb, row, text)
 import Element.Background as Background
 import Element.Border as Border
-import Element.Events as Events exposing (onClick)
+import Element.Events exposing (onClick)
 import Element.Font as Font
 import Element.Input as Input
 import Env
 import Html.Events
 import Json.Decode as Decode
-import Lamdera exposing (ClientId, SessionId, sendToBackend, sendToFrontend)
+import Lamdera exposing (ClientId, SessionId, sendToBackend)
 import Types exposing (..)
 import Url
 
@@ -34,11 +34,12 @@ app =
         , onUrlChange = UrlChanged
         , update = update
         , updateFromBackend = updateFromBackend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = \_ -> Sub.none
         , view = view
         }
 
 
+lobbyURL : Url.Url
 lobbyURL =
     Url.Url Env.protocol Env.host Env.urlport "/lobby" Nothing Nothing
 
@@ -48,13 +49,13 @@ landingURLtoGame gameid =
     Url.Url Env.protocol Env.host Env.urlport "/landing" (Just gameid) Nothing
 
 
+landingURL : Url.Url
 landingURL =
     Url.Url Env.protocol Env.host Env.urlport "/landing" Nothing Nothing
 
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
-    -- TODO: Generate a stub URL for each game to use as ID and access URL
     ( { key = key
       , url = landingURL
       , user = Nothing
@@ -105,15 +106,12 @@ update msg model =
                         Just param ->
                             case model.user of
                                 Nothing ->
-                                    -- Debug.todo "Make this URL keep the game ID parameter that needs to be used after a name is put in"
-                                    -- ( model, Nav.pushUrl model.key (Url.toString (landingURLtoGame param)) )
                                     ( { model | url = url }, Cmd.none )
 
                                 Just user ->
                                     if String.startsWith "id=" param then
                                         case model.activeGame of
                                             Nothing ->
-                                                -- Debug.todo "figure out how to parse the query parameters and send it to sendToBackend JoinGame"
                                                 ( { model | url = url }
                                                 , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
                                                 )
@@ -132,7 +130,7 @@ update msg model =
 
                 _ ->
                     case model.user of
-                        Just user ->
+                        Just _ ->
                             if model.activeGame == Nothing then
                                 ( model, Nav.pushUrl model.key (Url.toString lobbyURL) )
 
@@ -176,7 +174,7 @@ update msg model =
 
                 Just user ->
                     let
-                        -- Noone should be cluegiver immediately when creating a game
+                        -- No one should be cluegiver immediately when creating a game
                         u =
                             { user | cluegiver = False }
                     in
@@ -203,10 +201,6 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just game ->
-                    let
-                        newcard =
-                            { card | revealed = True }
-                    in
                     case model.user of
                         Nothing ->
                             ( model, Cmd.none )
@@ -223,6 +217,10 @@ update msg model =
                                             ( model, sendToBackend (EndGame Red game) )
 
                                 else
+                                    let
+                                        newcard =
+                                            { card | revealed = True }
+                                    in
                                     ( model, sendToBackend (ChangeCardRevealedState newcard game) )
 
                             else

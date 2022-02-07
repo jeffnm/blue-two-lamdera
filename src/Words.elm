@@ -1,6 +1,7 @@
 module Words exposing (..)
 
 
+words : List String
 words =
     [ "ATM"
     , "CD"

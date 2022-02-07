@@ -1,8 +1,8 @@
 module Backend exposing (..)
 
 import Cards exposing (generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
-import Hashids exposing (..)
-import Lamdera exposing (ClientId, SessionId, clientConnected_, onConnect, sendToBackend, sendToFrontend)
+import Hashids
+import Lamdera exposing (ClientId, SessionId, sendToFrontend)
 import Task
 import Time
 import Time.Extra as Time
@@ -42,7 +42,7 @@ init =
 
 
 subscriptions : Model -> Sub BackendMsg
-subscriptions model =
+subscriptions _ =
     Sub.batch
         [ Lamdera.onConnect CheckSession
         , Lamdera.onDisconnect ClientDisconnected
@@ -65,7 +65,7 @@ update msg model =
                 |> Maybe.map (\user -> ( model, sendToFrontend cid (ClientInfo sid cid (Just { user | clientId = Just cid })) ))
                 |> Maybe.withDefault ( model, sendToFrontend cid (ClientInfo sid cid Nothing) )
 
-        RenewSession uid sid cid now ->
+        RenewSession _ sid cid now ->
             let
                 updatedSession =
                     model.sessions
@@ -79,7 +79,7 @@ update msg model =
             in
             ( { model | sessions = newSessions }, Time.now |> Task.perform (always (CheckSession sid cid)) )
 
-        RegisterUserSession user sessionId clientId now ->
+        RegisterUserSession user sessionId _ now ->
             let
                 newSession =
                     ( sessionId, Session user (now |> Time.add Time.Hour 1 Time.utc) )
@@ -93,10 +93,10 @@ update msg model =
             cleanupGames model
 
         ClientConnected sessionId clientId ->
-            -- Debug.todo "Check if the session is already active, and if so, send the user information to the client"
+            -- Check that if a session is active and send the user data to the new client
             ( model, sendToFrontend clientId (ClientInfo sessionId clientId (getSessionInfo sessionId model.sessions)) )
 
-        ClientDisconnected sessionId clientId ->
+        ClientDisconnected _ _ ->
             ( model, Cmd.batch [ Time.now |> Task.perform CleanUpSessions, Time.now |> Task.perform (always CleanUpGames) ] )
 
         ShuffledWords words ->
@@ -156,7 +156,7 @@ updateFromFrontend sessionId clientId msg model =
                                 activeGame =
                                     game
                             in
-                            --update the games in the model and let the joiner load the game
+                            -- update the games in the model and batch Cmd msg
                             ( { model | games = games }
                             , Cmd.batch
                                 [ sendUpdatedGameToPlayers activeGame.id games
@@ -242,25 +242,26 @@ updateFromFrontend sessionId clientId msg model =
 -- UTILITIES
 
 
+hash : Hashids.Context
 hash =
-    createHashidsContext "a salt for a clue" 5 "0123456789abcdefghijk"
+    Hashids.createHashidsContext "a salt for a clue" 5 "0123456789abcdefghijk"
 
 
 generateId : List Int -> String
 generateId ints =
-    encodeList hash ints
+    Hashids.encodeList hash ints
 
 
 decodeId : String -> List Int
 decodeId hashids =
-    decode hash hashids
+    Hashids.decode hash hashids
 
 
 generateGame : Model -> NewGameSettings -> User -> Game
 generateGame model settings user =
     let
         newId =
-            generateId ((List.length model.games + 1) :: [ String.length user.name ])
+            generateId [ List.length model.games + 1, String.length user.name ]
 
         status =
             getGameStatusFromStartingTeam settings.startingTeam
@@ -274,14 +275,13 @@ generateGame model settings user =
 
 joinGame : String -> User -> List Game -> Maybe (List Game)
 joinGame id user games =
-    case findGame id games of
-        Nothing ->
-            Nothing
-
-        Just game ->
-            addUserToGame user game
-                |> updateGame games
-                |> Just
+    findGame id games
+        |> Maybe.andThen
+            (\g ->
+                addUserToGame user g
+                    |> updateGame games
+                    |> Just
+            )
 
 
 findGame : String -> List Game -> Maybe Game
@@ -389,6 +389,7 @@ sendUpdatedGameToPlayers gameId games =
             Cmd.batch <| List.map (\u -> sendToFrontend u (ActiveGame game)) (getClientIdsFromUsers game.users)
 
 
+renewSession : User -> SessionId -> ClientId -> Cmd BackendMsg
 renewSession user sid cid =
     Time.now |> Task.perform (RenewSession user sid cid)
 
@@ -411,7 +412,7 @@ getSessionInfo sessionId sessions =
 
 
 removeSessionAndClientIdsFromUserInAllGames : Model -> SessionId -> ClientId -> List Game
-removeSessionAndClientIdsFromUserInAllGames model sessionId clientId =
+removeSessionAndClientIdsFromUserInAllGames model sessionId _ =
     -- It might be a bad id to have maybe sessionids and maybe clientids - perhaps we should simply remove users when they disconnect
     List.map
         (\g ->
@@ -445,7 +446,7 @@ cleanupSessions : Model -> Time.Posix -> ( Model, Cmd msg )
 cleanupSessions model now =
     let
         newSessions =
-            List.filter (\( id, session ) -> Time.posixToMillis session.expires > Time.posixToMillis now) model.sessions
+            List.filter (\( _, session ) -> Time.posixToMillis session.expires > Time.posixToMillis now) model.sessions
     in
     -- ( { model | sessions = newSessions }, Cmd.batch <| List.map (\g -> sendUpdatedGameToPlayers g.id newGames) newGames )
     ( { model | sessions = newSessions }, Cmd.none )
@@ -493,8 +494,8 @@ cleanupGames model =
 
         sessionIdsInGamesWithActiveSessions =
             model.sessions
-                |> List.filter (\( sid, session ) -> List.member sid allUserSessionIds)
-                |> List.map (\( sid, session ) -> sid)
+                |> List.filter (\( sid, _ ) -> List.member sid allUserSessionIds)
+                |> List.map (\( sid, _ ) -> sid)
     in
     ( { model | games = newGames }, Cmd.none )
 
