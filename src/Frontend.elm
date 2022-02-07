@@ -3,7 +3,7 @@ module Frontend exposing (..)
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Cards exposing (cardCardAlignmentToRgb)
-import Element as Element exposing (Element, centerX, column, el, rgb, row, text)
+import Element exposing (Element, centerX, column, el, rgb, row, text)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events exposing (onClick)

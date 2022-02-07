@@ -18,6 +18,14 @@ import NoExposingEverything
 import NoImportingEverything
 import NoPrematureLetComputation
 import Review.Rule exposing (Rule)
+import NoUnused.CustomTypeConstructorArgs
+import NoUnused.CustomTypeConstructors
+import NoUnused.Dependencies
+import NoUnused.Exports
+import NoUnused.Modules
+import NoUnused.Parameters
+import NoUnused.Patterns
+import NoUnused.Variables
 
 
 config : List Rule
@@ -26,4 +34,5 @@ config =
     , NoDebug.TodoOrToString.rule
     , NoPrematureLetComputation.rule
     , NoImportingEverything.rule [ "Types", "Lamdera.Migrations" ]
+    , NoUnused.Variables.rule
     ]

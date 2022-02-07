@@ -1,8 +1,7 @@
 module Evergreen.Migrate.V5 exposing (..)
 
-import Evergreen.V1.Types exposing (GridSize(..))
 import Evergreen.V2.Types as Old
-import Evergreen.V5.Types as New exposing (ToBackend(..))
+import Evergreen.V5.Types as New
 import Lamdera exposing (sendToBackend)
 import Lamdera.Migrations exposing (..)
 import Types

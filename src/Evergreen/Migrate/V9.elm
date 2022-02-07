@@ -1,32 +1,33 @@
 module Evergreen.Migrate.V9 exposing (..)
 
+import Backend exposing (generateId)
 import Evergreen.V5.Types as Old
 import Evergreen.V9.Types as New
-import Lamdera.Migrations exposing (..)
-import Lamdera exposing (sendToBackend)
-import Types
 import Frontend exposing (landingURL)
-import Evergreen.Migrate.V5 exposing (oldNewUserSettingsToNewNewUserSettings)
-import Backend exposing (generateId)
+import Lamdera exposing (sendToBackend)
+import Lamdera.Migrations exposing (..)
+import Types
 
 
 frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
 frontendModel old =
     case old.user of
-        Nothing -> 
+        Nothing ->
             case old.activeGame of
-                Nothing -> 
+                Nothing ->
                     let
-                        newmodel = 
-                            New.FrontendModel old.key landingURL Nothing Nothing ( oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
-                    in 
-                        ModelMigrated (newmodel, sendToBackend Types.GetPublicGames)
+                        newmodel =
+                            New.FrontendModel old.key landingURL Nothing Nothing (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
+                    in
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
+
                 Just game ->
                     let
                         newmodel =
                             New.FrontendModel old.key landingURL Nothing (Just (oldGameToNewGame game old.publicGames "fakeuser")) (oldNewGameSettingsToNewNewGameSettings old.newGameSettings) (oldNewUserSettingsToNewNewUserSettings old.newUserSettings) []
                     in
-                    ModelMigrated (newmodel, sendToBackend Types.GetPublicGames)
+                    ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
+
         Just user ->
             case old.activeGame of
                 Nothing ->
@@ -44,22 +45,20 @@ frontendModel old =
                     ModelMigrated ( newmodel, sendToBackend Types.GetPublicGames )
 
 
-
 backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
 backendModel old =
-
     let
-        newgames = 
-            List.map(\g -> oldGameToNewGame g old.games "fakeuser") old.games 
+        newgames =
+            List.map (\g -> oldGameToNewGame g old.games "fakeuser") old.games
     in
-        ModelMigrated (New.BackendModel newgames old.words [], Cmd.none)
-    
+    ModelMigrated ( New.BackendModel newgames old.words [], Cmd.none )
+
 
 frontendMsg : Old.FrontendMsg -> MsgMigration New.FrontendMsg New.FrontendMsg
 frontendMsg old =
     case old of
-        Old.UrlClicked url -> 
-            MsgMigrated (New.UrlClicked url, Cmd.none)
+        Old.UrlClicked url ->
+            MsgMigrated ( New.UrlClicked url, Cmd.none )
 
         Old.UrlChanged url ->
             MsgMigrated ( New.UrlChanged url, Cmd.none )
@@ -86,16 +85,16 @@ frontendMsg old =
             MsgMigrated ( New.LoadingGame, Cmd.none )
 
         Old.JoiningGame _ ->
-            MsgMigrated (New.NoOpFrontendMsg, Cmd.none)
+            MsgMigrated ( New.NoOpFrontendMsg, Cmd.none )
 
         Old.ToggleNewGameSettingPublic public ->
             MsgMigrated ( New.ToggleNewGameSettingPublic public, Cmd.none )
 
         Old.ChangeNewGameSettingGridSize size ->
             MsgMigrated ( New.ChangeNewGameSettingGridSize size, Cmd.none )
-        
+
         Old.ChangeNewGameSettingTeam team ->
-            MsgMigrated (New.ChangeNewGameSettingTeam team, Cmd.none)
+            MsgMigrated ( New.ChangeNewGameSettingTeam team, Cmd.none )
 
         Old.RevealingCard card ->
             case card.team of
@@ -121,28 +120,28 @@ frontendMsg old =
             MsgMigrated ( New.ToggleTeam, Cmd.none )
 
 
-
 toBackend : Old.ToBackend -> MsgMigration New.ToBackend New.BackendMsg
 toBackend old =
     case old of
-        _ -> 
-            MsgMigrated (New.NoOpToBackend, Cmd.none)
+        _ ->
+            MsgMigrated ( New.NoOpToBackend, Cmd.none )
 
 
 backendMsg : Old.BackendMsg -> MsgMigration New.BackendMsg New.BackendMsg
 backendMsg old =
-
     case old of
         _ ->
-            MsgMigrated (New.NoOpBackendMsg, Cmd.none)
+            MsgMigrated ( New.NoOpBackendMsg, Cmd.none )
+
 
 toFrontend : Old.ToFrontend -> MsgMigration New.ToFrontend New.FrontendMsg
 toFrontend _ =
     MsgUnchanged
 
-oldGameToNewGame : Old.Game -> List Old.Game-> String -> New.Game
+
+oldGameToNewGame : Old.Game -> List Old.Game -> String -> New.Game
 oldGameToNewGame oldgame oldgamelist olduser =
-    New.Game ( generateId ((List.length oldgamelist +1) :: [ String.length olduser])) [] (oldGridSizeToNewGridsize oldgame.gridSize) oldgame.public (oldCardsToNewCards oldgame.cards) (oldGameStatusToNewGameStatus oldgame.gameStatus) oldgame.words (List.map (\c -> oldCardAlignmentsToNewCardAlignments c) oldgame.cardAlignments)
+    New.Game (generateId [ List.length oldgamelist + 1, String.length olduser ]) [] (oldGridSizeToNewGridsize oldgame.gridSize) oldgame.public (oldCardsToNewCards oldgame.cards) (oldGameStatusToNewGameStatus oldgame.gameStatus) oldgame.words (List.map (\c -> oldCardAlignmentsToNewCardAlignments c) oldgame.cardAlignments)
 
 
 oldGridSizeToNewGridsize : Old.GridSize -> New.GridSize
