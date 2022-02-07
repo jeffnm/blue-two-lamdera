@@ -12,6 +12,7 @@ dummyConfigItem =
     ""
 
 
+protocol : Url.Protocol
 protocol =
     case mode of
         Production ->
@@ -21,6 +22,7 @@ protocol =
             Url.Http
 
 
+host : String
 host =
     case mode of
         Production ->
@@ -30,6 +32,7 @@ host =
             "localhost"
 
 
+urlport : Maybe number
 urlport =
     case mode of
         Production ->
