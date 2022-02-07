@@ -1,7 +1,5 @@
 module Frontend exposing (..)
 
--- import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
-
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Cards exposing (cardCardAlignmentToRgb)
