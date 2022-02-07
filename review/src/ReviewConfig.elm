@@ -35,4 +35,5 @@ config =
     , NoPrematureLetComputation.rule
     , NoImportingEverything.rule [ "Types", "Lamdera.Migrations" ]
     , NoUnused.Variables.rule
+    , NoUnused.Parameters.rule
     ]
