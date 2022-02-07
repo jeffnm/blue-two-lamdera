@@ -96,24 +96,8 @@ update msg model =
             -- Check that if a session is active and send the user data to the new client
             ( model, sendToFrontend clientId (ClientInfo sessionId clientId (getSessionInfo sessionId model.sessions)) )
 
-        ClientDisconnected sessionId _ ->
-            let
-                newGame =
-                    updateGameRemoveUserBySessionId game sessionId
-
-                gamesList =
-                    if checkThatGameHasUsers newGame then
-                        updateGame model.games newGame
-
-                    else
-                        removeGame model.games newGame
-            in
-            ( { model | game = gamesList }
-            , Cmd.batch
-                [ Time.now |> Task.perform CleanUpSessions
-                , Time.now |> Task.perform (always CleanUpGames)
-                ]
-            )
+        ClientDisconnected _ _ ->
+            ( model, Cmd.batch [ Time.now |> Task.perform CleanUpSessions, Time.now |> Task.perform (always CleanUpGames) ] )
 
         ShuffledWords words ->
             ( { model | words = words }, Cmd.none )
