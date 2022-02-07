@@ -22,7 +22,6 @@ import NoUnused.CustomTypeConstructorArgs
 import NoUnused.CustomTypeConstructors
 import NoUnused.Dependencies
 import NoUnused.Exports
-import NoUnused.Modules
 import NoUnused.Parameters
 import NoUnused.Patterns
 import NoUnused.Variables
@@ -36,4 +35,9 @@ config =
     , NoImportingEverything.rule [ "Types", "Lamdera.Migrations" ]
     , NoUnused.Variables.rule
     , NoUnused.Parameters.rule
+    , NoUnused.Patterns.rule
+    , NoUnused.Dependencies.rule
+    , NoUnused.Exports.rule
+    -- , NoUnused.CustomTypeConstructors.rule []
+    -- , NoUnused.CustomTypeConstructorArgs.rule
     ]
