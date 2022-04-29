@@ -84,7 +84,12 @@ update msg model =
                 newSession =
                     ( sessionId, Session user (now |> Time.add Time.Hour 1 Time.utc) )
             in
-            ( { model | sessions = model.sessions ++ [ newSession ] }, Cmd.batch [ Time.now |> Task.perform CleanUpSessions, Time.now |> Task.perform (always CleanUpGames) ] )
+            ( { model | sessions = model.sessions ++ [ newSession ] }
+            , Cmd.batch
+                [ Time.now |> Task.perform CleanUpSessions
+                , Time.now |> Task.perform (always CleanUpGames)
+                ]
+            )
 
         CleanUpSessions now ->
             cleanupSessions model now
@@ -152,15 +157,11 @@ updateFromFrontend sessionId clientId msg model =
                             ( model, Cmd.none )
 
                         Just game ->
-                            let
-                                activeGame =
-                                    game
-                            in
                             -- update the games in the model and batch Cmd msg
                             ( { model | games = games }
                             , Cmd.batch
-                                [ sendUpdatedGameToPlayers activeGame.id games
-                                , sendToFrontend clientId (ActiveGame activeGame)
+                                [ sendUpdatedGameToPlayers game.id games
+                                , sendToFrontend clientId (ActiveGame game)
                                 , renewSession user sessionId clientId
                                 ]
                             )
@@ -269,10 +270,6 @@ generateGame model settings user =
     Game newId [ user ] settings.gridSize [] status [] []
 
 
-
--- (generateCards settings.gridSize settings.startingTeam)
-
-
 joinGame : String -> User -> List Game -> Maybe (List Game)
 joinGame id user games =
     findGame id games
@@ -321,11 +318,19 @@ didTeamWin game team =
 
 addUserToGame : User -> Game -> Game
 addUserToGame user game =
-    if List.member user game.users then
+    if checkIfUserSessionIsInGame user game.users then
         game
 
     else
         { game | users = game.users ++ [ user ] }
+
+
+checkIfUserSessionIsInGame : User -> List User -> Bool
+checkIfUserSessionIsInGame user gameusers =
+    gameusers
+        |> List.filter (\u -> u.sessionId == user.sessionId)
+        |> List.length
+        |> (\l -> l > 0)
 
 
 removeGame : List Game -> Game -> List Game
@@ -478,7 +483,7 @@ cleanupGames model =
 
         allUsersInGames =
             model.games
-                |> List.concatMap (\g -> g.users)
+                |> List.concatMap .users
 
         allUserSessionIds =
             allUsersInGames
@@ -500,34 +505,13 @@ cleanupGames model =
     ( { model | games = newGames }, Cmd.none )
 
 
-
--- removeSessionIdAndClientIdFromUserInOneGame : Game -> SessionId -> ClientId -> Game
--- removeSessionIdAndClientIdFromUserInOneGame game sessionId clientId =
---     let
---         newUsers =
---             List.map
---                 (\u ->
---                     case u.clientId of
---                         Nothing ->
---                             u
---                         Just c ->
---                             if c == clientId then
---                                 { u | clientId = Nothing, sessionId = Nothing }
---                             else
---                                 u
---                 )
---                 game.users
---     in
---     { game | users = newUsers }
-
-
 getGameStatusFromStartingTeam : Team -> GameStatus
 getGameStatusFromStartingTeam startingTeam =
     case startingTeam of
         Blue ->
             BlueTurn
 
-        _ ->
+        Red ->
             RedTurn
 
 

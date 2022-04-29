@@ -25,6 +25,7 @@ type alias BackendModel =
 
 
 type alias Session =
+    -- debug.todo: we should not store the users in two places - replace this one with the sessionid and then get the user for the client from the games list
     { user : User
     , expires : Time.Posix
     }
@@ -103,16 +104,14 @@ type FrontendMsg
     | NewUser
     | ChangeNewUserSettingUsername String
     | ChangeNewUserSettingTeam String
-    | CreatingNewGame
-    | LeavingGame
-    | LoadingGame
-    | JoiningGame String
+    | CreatingNewGame User
+    | LeavingGame User Game
     | ChangeNewGameSettingGridSize String
     | ChangeNewGameSettingTeam String
-    | RevealingCard Card
-    | EndingTurn
-    | ToggleClueGiverStatus
-    | ToggleTeam
+    | RevealingCard Card Game User
+    | EndingTurn Game
+    | ToggleClueGiverStatus User
+    | ToggleTeam User
 
 
 type ToBackend
@@ -144,6 +143,5 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | UserGames
     | ActiveGame Game
     | ClientInfo SessionId ClientId (Maybe User)

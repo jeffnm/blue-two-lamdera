@@ -72,17 +72,15 @@ init url key =
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
 update msg model =
     case msg of
-        UrlClicked urlRequest ->
-            case urlRequest of
-                Internal url ->
-                    ( model
-                    , Nav.pushUrl model.key (Url.toString url)
-                    )
+        UrlClicked (Internal url) ->
+            ( model
+            , Nav.pushUrl model.key (Url.toString url)
+            )
 
-                External url ->
-                    ( model
-                    , Nav.load url
-                    )
+        UrlClicked (External url) ->
+            ( model
+            , Nav.load url
+            )
 
         UrlChanged url ->
             case url.path of
@@ -97,34 +95,35 @@ update msg model =
                         ( { model | url = url }, Cmd.none )
 
                 "/game" ->
-                    case url.query of
-                        Nothing ->
+                    case ( url.query, model.user ) of
+                        ( Nothing, Nothing ) ->
+                            ( model, Cmd.none )
+
+                        ( Just _, Nothing ) ->
+                            ( { model | url = url }, Cmd.none )
+
+                        ( Nothing, Just _ ) ->
                             ( { model | url = lobbyURL }, Nav.pushUrl model.key (Url.toString lobbyURL) )
 
-                        Just param ->
-                            case model.user of
-                                Nothing ->
-                                    ( { model | url = url }, Cmd.none )
+                        ( Just param, Just user ) ->
+                            if String.startsWith "id=" param then
+                                case model.activeGame of
+                                    Nothing ->
+                                        ( { model | url = url }
+                                        , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
+                                        )
 
-                                Just user ->
-                                    if String.startsWith "id=" param then
-                                        case model.activeGame of
-                                            Nothing ->
-                                                ( { model | url = url }
-                                                , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
-                                                )
+                                    Just game ->
+                                        if game.id == String.dropLeft 3 param then
+                                            ( { model | url = url }, Cmd.none )
 
-                                            Just game ->
-                                                if game.id == String.dropLeft 3 param then
-                                                    ( { model | url = url }, Cmd.none )
+                                        else
+                                            ( { model | url = url }
+                                            , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
+                                            )
 
-                                                else
-                                                    ( { model | url = url }
-                                                    , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
-                                                    )
-
-                                    else
-                                        ( model, Nav.pushUrl model.key (Url.toString lobbyURL) )
+                            else
+                                ( { model | url = lobbyURL }, Nav.pushUrl model.key (Url.toString lobbyURL) )
 
                 _ ->
                     case model.user of
@@ -165,101 +164,62 @@ update msg model =
                         ]
                     )
 
-        CreatingNewGame ->
-            case model.user of
-                Nothing ->
-                    ( model, Cmd.none )
+        CreatingNewGame user ->
+            let
+                -- No one should be cluegiver immediately when creating a game
+                u =
+                    { user | cluegiver = False }
+            in
+            ( { model | user = Just u }
+            , sendToBackend (CreateNewGame model.newGameSettings u)
+            )
 
-                Just user ->
+        RevealingCard card game user ->
+            if isItUsersTurn user.team game.gameStatus then
+                if card.team == Assassin then
+                    case user.team of
+                        -- If your team picked Assassin, the other team wins.
+                        Red ->
+                            ( model, sendToBackend (EndGame Blue game) )
+
+                        Blue ->
+                            ( model, sendToBackend (EndGame Red game) )
+
+                else
                     let
-                        -- No one should be cluegiver immediately when creating a game
-                        u =
-                            { user | cluegiver = False }
+                        newcard =
+                            { card | revealed = True }
                     in
-                    ( { model | user = Just u }
-                    , sendToBackend (CreateNewGame model.newGameSettings user)
-                    )
+                    ( model, sendToBackend (ChangeCardRevealedState newcard game) )
 
-        JoiningGame id ->
-            case model.user of
-                Nothing ->
+            else
+                ( model, Cmd.none )
+
+        EndingTurn game ->
+            case game.gameStatus of
+                RedTurn ->
+                    ( model, sendToBackend (EndTurn game BlueTurn) )
+
+                BlueTurn ->
+                    ( model, sendToBackend (EndTurn game RedTurn) )
+
+                _ ->
                     ( model, Cmd.none )
 
-                Just user ->
-                    ( model
-                    , Cmd.batch
-                        [ sendToBackend (JoinGame id user)
-                        , Nav.pushUrl model.key ("/game?id=" ++ id)
-                        ]
-                    )
+        ToggleClueGiverStatus user ->
+            ( { model | user = Just (toggleClueGiver user (not user.cluegiver)) }, Cmd.none )
 
-        RevealingCard card ->
+        ToggleTeam user ->
+            let
+                newUser =
+                    toggleTeam user
+            in
             case model.activeGame of
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( { model | user = Just newUser }, Cmd.none )
 
                 Just game ->
-                    case model.user of
-                        Nothing ->
-                            ( model, Cmd.none )
-
-                        Just user ->
-                            if isItUsersTurn user.team game.gameStatus then
-                                if card.team == Assassin then
-                                    case user.team of
-                                        -- If your team picked Assassin, the other team wins.
-                                        Red ->
-                                            ( model, sendToBackend (EndGame Blue game) )
-
-                                        Blue ->
-                                            ( model, sendToBackend (EndGame Red game) )
-
-                                else
-                                    let
-                                        newcard =
-                                            { card | revealed = True }
-                                    in
-                                    ( model, sendToBackend (ChangeCardRevealedState newcard game) )
-
-                            else
-                                ( model, Cmd.none )
-
-        EndingTurn ->
-            case model.activeGame of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just game ->
-                    case game.gameStatus of
-                        RedTurn ->
-                            ( model, sendToBackend (EndTurn game BlueTurn) )
-
-                        BlueTurn ->
-                            ( model, sendToBackend (EndTurn game RedTurn) )
-
-                        _ ->
-                            ( model, Cmd.none )
-
-        ToggleClueGiverStatus ->
-            case model.user of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just user ->
-                    ( { model | user = Just (toggleClueGiver user (not user.cluegiver)) }, Cmd.none )
-
-        ToggleTeam ->
-            case model.user of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just user ->
-                    case model.activeGame of
-                        Nothing ->
-                            ( { model | user = Just (toggleTeam user) }, Cmd.none )
-
-                        Just game ->
-                            ( { model | user = Just (toggleTeam user) }, sendToBackend (ChangeUserTeam game (toggleTeam user)) )
+                    ( { model | user = Just newUser }, sendToBackend (ChangeUserTeam game newUser) )
 
         ChangeNewGameSettingGridSize gridSize ->
             ( { model | newGameSettings = setNewGameSettingGridSize model.newGameSettings gridSize }, Cmd.none )
@@ -273,27 +233,13 @@ update msg model =
         ChangeNewUserSettingUsername username ->
             ( { model | newUserSettings = setNewUserSettingUsername model.newUserSettings username }, Cmd.none )
 
-        LeavingGame ->
-            case model.user of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just user ->
-                    case model.activeGame of
-                        Nothing ->
-                            ( model, Cmd.none )
-
-                        Just game ->
-                            ( { model | activeGame = Nothing }
-                            , Cmd.batch
-                                [ sendToBackend (LeaveGame game user)
-                                , Nav.pushUrl model.key (Url.toString lobbyURL)
-                                ]
-                            )
-
-        _ ->
-            -- Debug.todo "Finish FrontendMsg updates"
-            ( model, Cmd.none )
+        LeavingGame user game ->
+            ( { model | activeGame = Nothing }
+            , Cmd.batch
+                [ sendToBackend (LeaveGame game user)
+                , Nav.pushUrl model.key (Url.toString lobbyURL)
+                ]
+            )
 
 
 updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
@@ -302,14 +248,18 @@ updateFromBackend msg model =
         NoOpToFrontend ->
             ( model, Cmd.none )
 
-        ClientInfo sessionId clientId maybeuser ->
-            -- (model, Cmd.none)
-            case maybeuser of
-                Nothing ->
-                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }, Cmd.none )
+        ClientInfo sessionId clientId (Just user) ->
+            ( { model
+                | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId
+                , user = Just user
+              }
+            , Cmd.batch [ Nav.pushUrl model.key (Url.toString model.url) ]
+            )
 
-                Just user ->
-                    ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId, user = Just user }, Cmd.batch [ Nav.pushUrl model.key (Url.toString model.url) ] )
+        ClientInfo sessionId clientId Nothing ->
+            ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }
+            , Cmd.none
+            )
 
         ActiveGame game ->
             ( { model | activeGame = Just game }
@@ -317,10 +267,6 @@ updateFromBackend msg model =
                 [ Nav.pushUrl model.key ("/game?id=" ++ game.id)
                 ]
             )
-
-        _ ->
-            -- Debug.todo "Implement other branches"
-            ( model, Cmd.none )
 
 
 
@@ -378,14 +324,15 @@ toggleClueGiver olduser cluegiver =
 
 toggleTeam : User -> User
 toggleTeam user =
-    { user
-        | team =
+    let
+        newTeam =
             if user.team == Red then
                 Blue
 
             else
                 Red
-    }
+    in
+    { user | team = newTeam }
 
 
 setNewGameSettingGridSize : NewGameSettings -> String -> NewGameSettings
@@ -423,16 +370,12 @@ getUsername user =
             ""
 
 
-getUserSessionId : Maybe User -> String
+getUserSessionId : User -> String
 getUserSessionId user =
-    case user of
-        Just u ->
-            case u.sessionId of
-                Just sid ->
-                    sid
-
-                Nothing ->
-                    ""
+    -- Can we use pattern matching here?
+    case user.sessionId of
+        Just sid ->
+            sid
 
         Nothing ->
             ""
@@ -505,7 +448,7 @@ getPlayersNamesByTeam : Game -> Team -> List String
 getPlayersNamesByTeam game team =
     List.filter (\p -> p.team == team) game.users
         |> List.filter (\p -> p.clientId /= Nothing)
-        |> List.map (\p -> p.name)
+        |> List.map .name
 
 
 onEnter : msg -> Element.Attribute msg
@@ -531,7 +474,7 @@ onEnter msg =
 
 view : Model -> Browser.Document FrontendMsg
 view model =
-    { title = ""
+    { title = "BLUE TWO"
     , body =
         [ Element.layout [] (viewSwitch model) ]
     }
@@ -539,26 +482,24 @@ view model =
 
 viewSwitch : Model -> Element FrontendMsg
 viewSwitch model =
-    case model.user of
-        Nothing ->
+    case ( model.user, model.activeGame ) of
+        ( Nothing, _ ) ->
             viewLandingPage model
 
-        Just user ->
-            case model.activeGame of
-                Nothing ->
-                    viewLobby model
+        ( Just user, Nothing ) ->
+            viewLobby model user
 
-                Just game ->
-                    viewGame game user
+        ( Just user, Just game ) ->
+            viewGame game user
 
 
 viewLandingPage : Model -> Element FrontendMsg
 viewLandingPage model =
-    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url (getUserSessionId model.user) ]
+    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url "" ]
 
 
-viewLobby : Model -> Element FrontendMsg
-viewLobby model =
+viewLobby : Model -> User -> Element FrontendMsg
+viewLobby model user =
     column [ Element.width Element.fill, Element.height Element.fill ]
         [ row [ Element.width Element.fill, Element.height Element.fill ]
             [ column [ Element.width (Element.fillPortion 1) ] []
@@ -574,14 +515,12 @@ viewLobby model =
                     ]
                     [ el [] (text ("Welcome " ++ getUsername model.user)) ]
                 , Element.wrappedRow [ Element.alignLeft, Element.width Element.fill ]
-                    [ viewCreateGameForm model
-
-                    -- , viewPublicGames model
+                    [ viewCreateGameForm model user
                     ]
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , viewDevelopmentFooter model.url (getUserSessionId model.user)
+        , viewDevelopmentFooter model.url (getUserSessionId user)
         ]
 
 
@@ -609,13 +548,13 @@ viewGame game user =
             ]
 
         gameOver =
-            viewGameBoardWrapper game.gridSize (viewCardsGameOver game.cards)
+            viewGameBoardWrapper game.gridSize (viewCardsAllRevealed game)
 
         winColumn winningText =
             column [ Element.width Element.fill ]
                 [ row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ el [] (text winningText) ]
                 , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] endScore
-                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton ]
+                , row [ Element.centerX, Element.spacing 5, Element.padding 10 ] [ viewLeaveGameButton user game ]
                 , gameOver
                 ]
     in
@@ -644,69 +583,111 @@ viewGame game user =
 viewGameHeader : Game -> User -> Element FrontendMsg
 viewGameHeader game user =
     row [ Element.width Element.fill, Element.padding 10 ]
-        [ viewBlueTeam game
+        [ viewBlueTeam game user
         , row [ Element.width (Element.fillPortion 3) ] [ viewTurnAndToggles game user ]
-        , viewRedTeam game
+        , viewRedTeam game user
         ]
 
 
 viewGameBoardWrapper : GridSize -> List (Element msg) -> Element msg
 viewGameBoardWrapper gridsize gameboard =
-    case gridsize of
-        SmallGrid ->
+    let
+        row =
             Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [ centerX ]
-                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1100 |> Element.minimum 1100), Element.padding 10, Element.spacing 10 ] gameboard ]
-                ]
 
-        MediumGrid ->
-            Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [ centerX ]
-                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1350 |> Element.minimum 1350), Element.padding 10, Element.spacing 10, centerX ] gameboard ]
-                ]
+        column =
+            Element.column [ centerX ]
 
-        LargeGrid ->
-            Element.row [ Element.width Element.fill, Element.padding 10 ]
-                [ Element.column [ centerX ]
-                    [ Element.wrappedRow [ Element.width (Element.fill |> Element.maximum 1600 |> Element.minimum 1600), Element.padding 10, Element.spacing 10 ] gameboard ]
+        grid =
+            case gridsize of
+                SmallGrid ->
+                    1100
+
+                MediumGrid ->
+                    1350
+
+                LargeGrid ->
+                    1600
+    in
+    row
+        [ column
+            [ Element.wrappedRow
+                [ Element.width
+                    (Element.fill
+                        |> Element.maximum grid
+                        |> Element.minimum grid
+                    )
+                , Element.spacing 10
                 ]
+                gameboard
+            ]
+        ]
 
 
 viewGamePlaying : Game -> User -> Element FrontendMsg
 viewGamePlaying game user =
-    if user.cluegiver then
-        column [ Element.width Element.fill ]
-            [ viewGameHeader game user
-            , viewGameBoardWrapper game.gridSize (viewCardsClueGiver game.cards)
-            ]
+    let
+        wrapper =
+            viewGameBoardWrapper game.gridSize <|
+                if user.cluegiver then
+                    viewCardsAllRevealed game
 
-    else
-        column [ Element.width Element.fill ]
-            [ viewGameHeader game user
-            , viewGameBoardWrapper game.gridSize (viewCardsPlaying game.cards (isItUsersTurn user.team game.gameStatus))
-            ]
+                else
+                    -- viewCardsPlaying game.cards <| isItUsersTurn user.team game.gameStatus
+                    viewCardsPlaying game user
+    in
+    column [ Element.width Element.fill ]
+        [ viewGameHeader game user
+        , wrapper
+        ]
 
 
-viewBlueTeam : Game -> Element FrontendMsg
-viewBlueTeam game =
+viewBlueTeam : Game -> User -> Element FrontendMsg
+viewBlueTeam game user =
     let
         score =
             el [] (text (getScore game Blue))
 
         players =
-            column [] (List.map (\p -> el [] (text p)) (getPlayersNamesByTeam game Blue))
+            column [] <|
+                List.map
+                    (\p ->
+                        el
+                            [ if p == user.name then
+                                Font.italic
+
+                              else
+                                Font.regular
+                            ]
+                            (text p)
+                    )
+                <|
+                    getPlayersNamesByTeam game Blue
     in
     column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
 
-viewRedTeam : Game -> Element FrontendMsg
-viewRedTeam game =
+viewRedTeam : Game -> User -> Element FrontendMsg
+viewRedTeam game user =
     let
         score =
             el [] (text (getScore game Red))
 
         players =
-            column [] (List.map (\p -> el [] (text p)) (getPlayersNamesByTeam game Red))
+            column [] <|
+                List.map
+                    (\p ->
+                        el
+                            [ if p == user.name then
+                                Font.italic
+
+                              else
+                                Font.regular
+                            ]
+                            (text p)
+                    )
+                <|
+                    getPlayersNamesByTeam game Red
     in
     column [ Element.width (Element.fillPortion 1), Element.padding 20, Element.spacing 5 ] [ score, players ]
 
@@ -716,7 +697,7 @@ viewTurnAndToggles game user =
     let
         endTurnButton =
             if isItUsersTurn user.team game.gameStatus then
-                Input.button viewButtonAttributes { onPress = Just EndingTurn, label = text "End Turn" }
+                Input.button viewButtonAttributes { onPress = Just (EndingTurn game), label = text "End Turn" }
 
             else
                 el [] (text "")
@@ -747,7 +728,7 @@ viewTurnAndToggles game user =
                 , el centered endTurnButton
                 , el centered (viewClueGiverToggleButton user)
                 , el centered (viewTeamToggleButton user)
-                , el centered viewLeaveGameButton
+                , el centered (viewLeaveGameButton user game)
                 ]
 
         BlueTurn ->
@@ -756,7 +737,7 @@ viewTurnAndToggles game user =
                 , el centered endTurnButton
                 , el centered (viewClueGiverToggleButton user)
                 , el centered (viewTeamToggleButton user)
-                , el centered viewLeaveGameButton
+                , el centered (viewLeaveGameButton user game)
                 ]
 
 
@@ -764,34 +745,33 @@ viewTurnAndToggles game user =
 -- VIEW CARDS
 
 
-viewCardsPlaying : List Card -> Bool -> List (Element FrontendMsg)
-viewCardsPlaying cardList clickable =
-    List.map
-        (\c ->
-            Element.paragraph (viewCardAttributes c clickable ++ viewCardColorIfRevealed c)
-                [ text c.word ]
-        )
-        cardList
+viewCardsPlaying : Game -> User -> List (Element FrontendMsg)
+viewCardsPlaying game user =
+    if isItUsersTurn user.team game.gameStatus then
+        List.map
+            (\c ->
+                Element.paragraph (viewCardBaseAttributes ++ viewCardAttributesClickable c game user ++ viewCardColorIfRevealed c)
+                    [ text c.word ]
+            )
+            game.cards
+
+    else
+        List.map
+            (\c ->
+                Element.paragraph (viewCardBaseAttributes ++ viewCardColorIfRevealed c)
+                    [ text c.word ]
+            )
+            game.cards
 
 
-viewCardsGameOver : List Card -> List (Element FrontendMsg)
-viewCardsGameOver cardList =
+viewCardsAllRevealed : Game -> List (Element FrontendMsg)
+viewCardsAllRevealed game =
     List.map
         (\c ->
-            el (viewCardAttributes c False ++ viewCardColorAttributes c)
+            el (viewCardBaseAttributes ++ viewCardColorAttributes c)
                 (text c.word)
         )
-        cardList
-
-
-viewCardsClueGiver : List Card -> List (Element FrontendMsg)
-viewCardsClueGiver cardList =
-    List.map
-        (\c ->
-            el (viewCardAttributes c False ++ viewCardColorAttributes c)
-                (text c.word)
-        )
-        cardList
+        game.cards
 
 
 
@@ -800,27 +780,35 @@ viewCardsClueGiver cardList =
 
 viewClueGiverToggleButton : User -> Element FrontendMsg
 viewClueGiverToggleButton user =
-    if user.cluegiver then
-        Input.button viewButtonAttributes { onPress = Just ToggleClueGiverStatus, label = text "Stop being clue giver" }
+    let
+        labeltext =
+            if user.cluegiver then
+                text "Stop being clue giver"
 
-    else
-        Input.button viewButtonAttributes { onPress = Just ToggleClueGiverStatus, label = text "Become clue giver" }
+            else
+                text "Become clue giver"
+    in
+    Input.button viewButtonAttributes { onPress = Just (ToggleClueGiverStatus user), label = labeltext }
 
 
 viewTeamToggleButton : User -> Element FrontendMsg
 viewTeamToggleButton user =
-    if user.team == Red then
-        Input.button viewButtonAttributes { onPress = Just ToggleTeam, label = text "Switch to Blue team" }
+    let
+        labeltext =
+            if user.team == Red then
+                text "Switch to Blue team"
 
-    else
-        Input.button viewButtonAttributes { onPress = Just ToggleTeam, label = text "Switch to Red team" }
+            else
+                text "Switch to Red team"
+    in
+    Input.button viewButtonAttributes { onPress = Just (ToggleTeam user), label = labeltext }
 
 
-viewLeaveGameButton : Element FrontendMsg
-viewLeaveGameButton =
+viewLeaveGameButton : User -> Game -> Element FrontendMsg
+viewLeaveGameButton user game =
     Input.button viewButtonAttributes
-        { onPress = Just LeavingGame
-        , label = text "Return to lobby"
+        { onPress = Just (LeavingGame user game)
+        , label = text "Quit"
         }
 
 
@@ -868,8 +856,8 @@ viewCreateUserForm model =
         ]
 
 
-viewCreateGameForm : Model -> Element FrontendMsg
-viewCreateGameForm model =
+viewCreateGameForm : Model -> User -> Element FrontendMsg
+viewCreateGameForm model user =
     column [ Element.width (Element.fillPortion 3) ]
         [ el [ Element.paddingXY 0 20 ] (text "Create a new game, then send the URL to your friends so they can join you.")
         , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
@@ -917,7 +905,7 @@ viewCreateGameForm model =
                 ]
             , row [ Element.width Element.fill ]
                 [ Input.button (viewButtonAttributes ++ [])
-                    { onPress = Just CreatingNewGame
+                    { onPress = Just (CreatingNewGame user)
                     , label = text "Create Game"
                     }
                 ]
@@ -942,29 +930,25 @@ viewButtonAttributes =
     ]
 
 
-viewCardAttributes : Card -> Bool -> List (Element.Attribute FrontendMsg)
-viewCardAttributes card clickable =
-    let
-        base =
-            [ Element.width (Element.fill |> Element.maximum 250 |> Element.minimum 250)
-            , Element.spacing 50
-            , Element.padding 40
-            , Font.center
-            , Element.alignLeft
-            , Border.rounded 5
-            , Border.width 1
-            , Border.solid
-            ]
-    in
-    if clickable then
-        base
-            ++ [ Element.pointer
-               , Element.mouseOver [ Border.glow (rgb 0.5 0.5 0) 0.5 ]
-               , onClick (RevealingCard card)
-               ]
+viewCardAttributesClickable : Card -> Game -> User -> List (Element.Attribute FrontendMsg)
+viewCardAttributesClickable card game user =
+    [ Element.pointer
+    , Element.mouseOver [ Border.glow (rgb 0.5 0.5 0.5) 0.5 ]
+    , onClick (RevealingCard card game user)
+    ]
 
-    else
-        base
+
+viewCardBaseAttributes : List (Element.Attribute msg)
+viewCardBaseAttributes =
+    [ Element.width (Element.fill |> Element.maximum 250 |> Element.minimum 250)
+    , Element.spacing 50
+    , Element.padding 40
+    , Font.center
+    , Element.alignLeft
+    , Border.rounded 5
+    , Border.width 1
+    , Border.solid
+    ]
 
 
 viewCardColorAttributes : Card -> List (Element.Attribute FrontendMsg)
@@ -975,6 +959,9 @@ viewCardColorAttributes card =
     in
     case card.team of
         Assassin ->
+            [ cardColorAttr, Font.color (rgb 1 1 1) ]
+
+        BlueCard ->
             [ cardColorAttr, Font.color (rgb 1 1 1) ]
 
         _ ->
