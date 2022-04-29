@@ -17,6 +17,19 @@ type alias FrontendModel =
     }
 
 
+type PossibleFrontendModel
+    = Loading RoutingState
+    | NoUser RoutingState NewUserSettings
+    | NoGame RoutingState User NewGameSettings
+    | LoadedGame RoutingState User Game
+
+
+type alias RoutingState =
+    { key : Key
+    , url : Url
+    }
+
+
 type alias BackendModel =
     { games : List Game
     , words : List String
