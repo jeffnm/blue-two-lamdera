@@ -54,27 +54,47 @@ landingURL =
 
 init : Url.Url -> Nav.Key -> ( Model, Cmd FrontendMsg )
 init url key =
-    ( { key = key
-      , url = landingURL
-      , user = Nothing
-      , activeGame = Nothing
-      , newGameSettings = NewGameSettings MediumGrid Blue
-      , newUserSettings = NewUserSettings "" Blue Nothing Nothing
-      }
-    , Cmd.batch [ Nav.pushUrl key (Url.toString url) ]
-    )
+    ( LoadingPage { url = url, key = key }, Cmd.batch [ Nav.pushUrl key (Url.toString url) ] )
+
+
+defaultNewGameSettings =
+    NewGameSettings MediumGrid Blue
+
+
+defaultNewUserSettings =
+    NewUserSettings "" Blue Nothing Nothing
 
 
 
 -- UPDATE
 
 
+getRoutingStateFromModel : Model -> RoutingState
+getRoutingStateFromModel model =
+    case model of
+        LoadingPage state ->
+            state
+
+        LandingPage state _ ->
+            state
+
+        LobbyPage state _ _ ->
+            state
+
+        LoadedGamePage state _ _ ->
+            state
+
+
 update : FrontendMsg -> Model -> ( Model, Cmd FrontendMsg )
 update msg model =
+    let
+        state =
+            getRoutingStateFromModel model
+    in
     case msg of
         UrlClicked (Internal url) ->
             ( model
-            , Nav.pushUrl model.key (Url.toString url)
+            , Nav.pushUrl state.key (Url.toString url)
             )
 
         UrlClicked (External url) ->
@@ -83,95 +103,95 @@ update msg model =
             )
 
         UrlChanged url ->
-            case url.path of
-                "/landing" ->
-                    ( { model | url = url }, Cmd.none )
+            case model of
+                LoadingPage _ ->
+                    -- Should be the case anytime the user manually changes the url
+                    case url.path of
+                        "/lobby" ->
+                            ( LandingPage { state | url = landingURL } defaultNewUserSettings
+                            , Nav.pushUrl state.key (Url.toString landingURL)
+                            )
 
-                "/lobby" ->
-                    if model.user == Nothing then
-                        ( { model | url = landingURL }, Nav.pushUrl model.key (Url.toString landingURL) )
+                        "/game" ->
+                            -- Record the game id url parameter, then send them to the login
+                            ( LandingPage { state | url = url } defaultNewUserSettings
+                            , Nav.pushUrl state.key (Url.toString landingURL)
+                            )
 
-                    else
-                        ( { model | url = url }, Cmd.none )
-
-                "/game" ->
-                    case ( url.query, model.user ) of
-                        ( Nothing, Nothing ) ->
+                        _ ->
                             ( model, Cmd.none )
 
-                        ( Just _, Nothing ) ->
-                            ( { model | url = url }, Cmd.none )
+                LandingPage _ _ ->
+                    -- If there is no user yet, then we don't go anywhere else
+                    ( model, Cmd.none )
 
-                        ( Nothing, Just _ ) ->
-                            ( { model | url = lobbyURL }, Nav.pushUrl model.key (Url.toString lobbyURL) )
-
-                        ( Just param, Just user ) ->
-                            if String.startsWith "id=" param then
-                                case model.activeGame of
-                                    Nothing ->
-                                        ( { model | url = url }
-                                        , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
+                LobbyPage _ user settings ->
+                    case url.path of
+                        "/game" ->
+                            -- If the user is logged in and tries to load a game param,
+                            -- try to have them join the game, waiting in the lobby for a response
+                            case url.query of
+                                Just param ->
+                                    if String.startsWith "id=" param then
+                                        ( LobbyPage state user settings
+                                        , Cmd.batch
+                                            [ sendToBackend <|
+                                                JoinGame (String.dropLeft 3 param) user
+                                            ]
                                         )
 
-                                    Just game ->
-                                        if game.id == String.dropLeft 3 param then
-                                            ( { model | url = url }, Cmd.none )
+                                    else
+                                        ( LobbyPage { state | url = lobbyURL } user settings
+                                        , Nav.pushUrl state.key (Url.toString lobbyURL)
+                                        )
 
-                                        else
-                                            ( { model | url = url }
-                                            , Cmd.batch [ sendToBackend (JoinGame (String.dropLeft 3 param) user) ]
-                                            )
+                                Nothing ->
+                                    ( LobbyPage { state | url = lobbyURL } user settings
+                                    , Nav.pushUrl state.key (Url.toString lobbyURL)
+                                    )
 
-                            else
-                                ( { model | url = lobbyURL }, Nav.pushUrl model.key (Url.toString lobbyURL) )
+                        _ ->
+                            ( model, Cmd.none )
 
-                _ ->
-                    case model.user of
-                        Just _ ->
-                            if model.activeGame == Nothing then
-                                ( model, Nav.pushUrl model.key (Url.toString lobbyURL) )
-
-                            else
-                                ( model, Cmd.none )
-
-                        Nothing ->
-                            ( { model | url = landingURL }
-                            , Nav.pushUrl model.key (Url.toString landingURL)
-                            )
+                LoadedGamePage _ _ _ ->
+                    -- If the user has a loaded game, that's all we show
+                    ( model, Cmd.none )
 
         NoOpFrontendMsg ->
             ( model, Cmd.none )
 
-        NewUser ->
+        NewUser settings ->
             let
                 newUser =
-                    User model.newUserSettings.username model.newUserSettings.team False model.newUserSettings.sessionId model.newUserSettings.clientId
+                    User settings.username settings.team False settings.sessionId settings.clientId
             in
-            case model.url.query of
+            case state.url.query of
                 Nothing ->
-                    ( { model | user = Just newUser }
+                    -- If there is no url query saved, then we just go to the lobby and register the user
+                    ( LobbyPage { state | url = lobbyURL } newUser defaultNewGameSettings
                     , Cmd.batch
-                        [ Nav.pushUrl model.key (Url.toString lobbyURL)
+                        [ Nav.pushUrl state.key (Url.toString lobbyURL)
                         , sendToBackend (RegisterUser newUser)
                         ]
                     )
 
                 Just param ->
-                    ( { model | user = Just newUser }
+                    -- If there is a url query saved, then we send them to the game saved url to see if they can join it
+                    ( LobbyPage state newUser defaultNewGameSettings
                     , Cmd.batch
-                        [ Nav.pushUrl model.key ("/game?" ++ param)
+                        [ Nav.pushUrl state.key ("/game?" ++ param)
                         , sendToBackend (RegisterUser newUser)
                         ]
                     )
 
-        CreatingNewGame user ->
+        CreatingNewGame user settings ->
             let
                 -- No one should be cluegiver immediately when creating a game
                 u =
                     { user | cluegiver = False }
             in
-            ( { model | user = Just u }
-            , sendToBackend (CreateNewGame model.newGameSettings u)
+            ( LobbyPage state u settings
+            , sendToBackend (CreateNewGame settings u)
             )
 
         RevealingCard card game user ->
@@ -206,67 +226,129 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        ToggleClueGiverStatus user ->
-            ( { model | user = Just (toggleClueGiver user (not user.cluegiver)) }, Cmd.none )
+        ToggleClueGiverStatus user game ->
+            ( LoadedGamePage state (toggleClueGiver user (not user.cluegiver)) game, Cmd.none )
 
-        ToggleTeam user ->
+        ToggleTeam user activeGame ->
             let
                 newUser =
                     toggleTeam user
             in
-            case model.activeGame of
+            case activeGame of
                 Nothing ->
-                    ( { model | user = Just newUser }, Cmd.none )
+                    case model of
+                        LobbyPage _ _ settings ->
+                            ( LobbyPage state newUser settings, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
 
                 Just game ->
-                    ( { model | user = Just newUser }, sendToBackend (ChangeUserTeam game newUser) )
+                    ( LoadedGamePage state newUser game, sendToBackend (ChangeUserTeam game newUser) )
 
         ChangeNewGameSettingGridSize gridSize ->
-            ( { model | newGameSettings = setNewGameSettingGridSize model.newGameSettings gridSize }, Cmd.none )
+            case model of
+                LobbyPage _ user settings ->
+                    ( LobbyPage state user (setNewGameSettingGridSize settings gridSize), Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         ChangeNewGameSettingTeam team ->
-            ( { model | newGameSettings = setNewGameSettingTeam model.newGameSettings (teamFromString team) }, Cmd.none )
+            case model of
+                LobbyPage _ user settings ->
+                    ( LobbyPage state user (setNewGameSettingTeam settings (teamFromString team)), Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         ChangeNewUserSettingTeam team ->
-            ( { model | newUserSettings = setNewUserSettingTeam model.newUserSettings (teamFromString team) }, Cmd.none )
+            case model of
+                LandingPage _ settings ->
+                    ( LandingPage state (setNewUserSettingTeam settings (teamFromString team)), Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         ChangeNewUserSettingUsername username ->
-            ( { model | newUserSettings = setNewUserSettingUsername model.newUserSettings username }, Cmd.none )
+            case model of
+                LandingPage _ settings ->
+                    ( LandingPage state (setNewUserSettingUsername settings username), Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         LeavingGame user game ->
-            ( { model | activeGame = Nothing }
+            ( LobbyPage state user defaultNewGameSettings
             , Cmd.batch
                 [ sendToBackend (LeaveGame game user)
-                , Nav.pushUrl model.key (Url.toString lobbyURL)
+                , Nav.pushUrl state.key (Url.toString lobbyURL)
                 ]
             )
 
 
 updateFromBackend : ToFrontend -> Model -> ( Model, Cmd FrontendMsg )
 updateFromBackend msg model =
+    let
+        state =
+            getRoutingStateFromModel model
+    in
     case msg of
         NoOpToFrontend ->
             ( model, Cmd.none )
 
-        ClientInfo sessionId clientId (Just user) ->
-            ( { model
-                | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId
-                , user = Just user
-              }
-            , Cmd.batch [ Nav.pushUrl model.key (Url.toString model.url) ]
-            )
+        ClientInfo _ _ (Just user) ->
+            case model of
+                LoadingPage _ ->
+                    ( LobbyPage state user defaultNewGameSettings
+                    , Cmd.batch [ Nav.pushUrl state.key (Url.toString lobbyURL) ]
+                    )
+
+                LobbyPage _ _ settings ->
+                    if state.url.path == "/game" then
+                        ( LobbyPage state user settings
+                        , Cmd.batch [ Nav.pushUrl state.key (Url.toString state.url) ]
+                        )
+
+                    else
+                        ( LobbyPage state user settings, Cmd.none )
+
+                LandingPage _ _ ->
+                    if state.url.path == "/game" then
+                        ( LobbyPage state user defaultNewGameSettings
+                        , Cmd.batch [ Nav.pushUrl state.key (Url.toString state.url) ]
+                        )
+
+                    else
+                        ( LobbyPage state user defaultNewGameSettings
+                        , Cmd.batch [ Nav.pushUrl state.key (Url.toString lobbyURL) ]
+                        )
+
+                LoadedGamePage _ _ game ->
+                    ( LoadedGamePage state user game, Cmd.none )
 
         ClientInfo sessionId clientId Nothing ->
-            ( { model | newUserSettings = setNewUserSettingSessionIdAndClientId model.newUserSettings sessionId clientId }
-            , Cmd.none
+            ( LandingPage state <|
+                setNewUserSettingSessionIdAndClientId defaultNewUserSettings sessionId clientId
+            , Cmd.batch [ Nav.pushUrl state.key (Url.toString landingURL) ]
             )
 
         ActiveGame game ->
-            ( { model | activeGame = Just game }
-            , Cmd.batch
-                [ Nav.pushUrl model.key ("/game?id=" ++ game.id)
-                ]
-            )
+            case model of
+                LobbyPage _ user _ ->
+                    -- If the user is in the lobby, we just go to the game
+                    ( LoadedGamePage state user game
+                    , Cmd.batch
+                        [ Nav.pushUrl state.key ("/game?id=" ++ game.id)
+                        ]
+                    )
+
+                LoadedGamePage _ user _ ->
+                    -- If the user is in game, justs update the game, no need to change anything else
+                    ( LoadedGamePage state user game, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -482,24 +564,37 @@ view model =
 
 viewSwitch : Model -> Element FrontendMsg
 viewSwitch model =
-    case ( model.user, model.activeGame ) of
-        ( Nothing, _ ) ->
-            viewLandingPage model
+    case model of
+        LoadingPage state ->
+            viewLoading state
 
-        ( Just user, Nothing ) ->
-            viewLobby model user
+        LandingPage state settings ->
+            viewLandingPage state settings
 
-        ( Just user, Just game ) ->
-            viewGame game user
+        LobbyPage state user settings ->
+            viewLobby state user settings
 
-
-viewLandingPage : Model -> Element FrontendMsg
-viewLandingPage model =
-    column [ Element.width Element.fill, Element.height Element.fill ] [ viewCreateUserForm model, viewDevelopmentFooter model.url "" ]
+        LoadedGamePage state user game ->
+            viewGame state user game
 
 
-viewLobby : Model -> User -> Element FrontendMsg
-viewLobby model user =
+viewLoading : RoutingState -> Element FrontendMsg
+viewLoading state =
+    column
+        []
+        [ Element.text "Loading...", viewDevelopmentFooter state.url "" ]
+
+
+viewLandingPage : RoutingState -> NewUserSettings -> Element FrontendMsg
+viewLandingPage state settings =
+    column [ Element.width Element.fill, Element.height Element.fill ]
+        [ viewCreateUserForm settings
+        , viewDevelopmentFooter state.url ""
+        ]
+
+
+viewLobby : RoutingState -> User -> NewGameSettings -> Element FrontendMsg
+viewLobby state user setting =
     column [ Element.width Element.fill, Element.height Element.fill ]
         [ row [ Element.width Element.fill, Element.height Element.fill ]
             [ column [ Element.width (Element.fillPortion 1) ] []
@@ -513,14 +608,14 @@ viewLobby model user =
                         , top = 0
                         }
                     ]
-                    [ el [] (text ("Welcome " ++ getUsername model.user)) ]
+                    [ el [] (text ("Welcome " ++ user.name)) ]
                 , Element.wrappedRow [ Element.alignLeft, Element.width Element.fill ]
-                    [ viewCreateGameForm model user
+                    [ viewCreateGameForm user setting
                     ]
                 ]
             , column [ Element.width (Element.fillPortion 1) ] []
             ]
-        , viewDevelopmentFooter model.url (getUserSessionId user)
+        , viewDevelopmentFooter state.url (getUserSessionId user)
         ]
 
 
@@ -539,8 +634,8 @@ viewDevelopmentFooter url sessionId =
             ]
 
 
-viewGame : Game -> User -> Element FrontendMsg
-viewGame game user =
+viewGame : RoutingState -> User -> Game -> Element FrontendMsg
+viewGame _ user game =
     let
         endScore =
             [ el [] (text (getScore game Blue))
@@ -726,8 +821,8 @@ viewTurnAndToggles game user =
             row controlAttrs
                 [ el centered (text "It's Red's turn.")
                 , el centered endTurnButton
-                , el centered (viewClueGiverToggleButton user)
-                , el centered (viewTeamToggleButton user)
+                , el centered (viewClueGiverToggleButton user game)
+                , el centered (viewTeamToggleButton user game)
                 , el centered (viewLeaveGameButton user game)
                 ]
 
@@ -735,8 +830,8 @@ viewTurnAndToggles game user =
             row controlAttrs
                 [ el centered (text "It's Blue's turn.")
                 , el centered endTurnButton
-                , el centered (viewClueGiverToggleButton user)
-                , el centered (viewTeamToggleButton user)
+                , el centered (viewClueGiverToggleButton user game)
+                , el centered (viewTeamToggleButton user game)
                 , el centered (viewLeaveGameButton user game)
                 ]
 
@@ -778,8 +873,8 @@ viewCardsAllRevealed game =
 -- VIEW BUTTONS
 
 
-viewClueGiverToggleButton : User -> Element FrontendMsg
-viewClueGiverToggleButton user =
+viewClueGiverToggleButton : User -> Game -> Element FrontendMsg
+viewClueGiverToggleButton user game =
     let
         labeltext =
             if user.cluegiver then
@@ -788,11 +883,11 @@ viewClueGiverToggleButton user =
             else
                 text "Become clue giver"
     in
-    Input.button viewButtonAttributes { onPress = Just (ToggleClueGiverStatus user), label = labeltext }
+    Input.button viewButtonAttributes { onPress = Just (ToggleClueGiverStatus user game), label = labeltext }
 
 
-viewTeamToggleButton : User -> Element FrontendMsg
-viewTeamToggleButton user =
+viewTeamToggleButton : User -> Game -> Element FrontendMsg
+viewTeamToggleButton user game =
     let
         labeltext =
             if user.team == Red then
@@ -801,7 +896,7 @@ viewTeamToggleButton user =
             else
                 text "Switch to Red team"
     in
-    Input.button viewButtonAttributes { onPress = Just (ToggleTeam user), label = labeltext }
+    Input.button viewButtonAttributes { onPress = Just (ToggleTeam user (Just game)), label = labeltext }
 
 
 viewLeaveGameButton : User -> Game -> Element FrontendMsg
@@ -816,8 +911,8 @@ viewLeaveGameButton user game =
 -- VIEW FORMS
 
 
-viewCreateUserForm : Model -> Element FrontendMsg
-viewCreateUserForm model =
+viewCreateUserForm : NewUserSettings -> Element FrontendMsg
+viewCreateUserForm setting =
     row [ Element.width Element.fill, Element.height Element.fill, Element.padding 50, Element.spacing 5, Element.centerY ]
         [ column [ Element.width (Element.fillPortion 1) ] []
         , column [ Element.width (Element.fillPortion 3) ]
@@ -825,11 +920,11 @@ viewCreateUserForm model =
                 [ column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ] []
                 , column [ centerX, Element.spacing 10, Element.width (Element.fillPortion 1) ]
                     [ row [ Element.width Element.fill ]
-                        [ Input.text [ Element.spacing 5, onEnter NewUser, Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 200) ]
+                        [ Input.text [ Element.spacing 5, onEnter (NewUser setting), Element.width (Element.fill |> Element.maximum 800 |> Element.minimum 200) ]
                             { label = Input.labelLeft [] (text "Username")
                             , onChange = ChangeNewUserSettingUsername
                             , placeholder = Nothing
-                            , text = model.newUserSettings.username
+                            , text = setting.username
                             }
                         ]
                     , row [ Element.width Element.fill ]
@@ -837,14 +932,14 @@ viewCreateUserForm model =
                             [ Element.spacing 10 ]
                             { label = Input.labelLeft [ Element.paddingEach { bottom = 0, left = 0, right = 50, top = 0 } ] (text "Team")
                             , onChange = ChangeNewUserSettingTeam
-                            , selected = Just (teamToString model.newUserSettings.team)
+                            , selected = Just (teamToString setting.team)
                             , options = [ Input.option "Blue" (text "Blue"), Input.option "Red" (text "Red") ]
                             }
                         ]
                     , row [ Element.width Element.fill ]
                         [ Input.button
                             (viewButtonAttributes ++ [ Element.centerX, Element.width (Element.px 150) ])
-                            { onPress = Just NewUser
+                            { onPress = Just (NewUser setting)
                             , label = text "Start"
                             }
                         ]
@@ -856,15 +951,15 @@ viewCreateUserForm model =
         ]
 
 
-viewCreateGameForm : Model -> User -> Element FrontendMsg
-viewCreateGameForm model user =
+viewCreateGameForm : User -> NewGameSettings -> Element FrontendMsg
+viewCreateGameForm user setting =
     column [ Element.width (Element.fillPortion 3) ]
         [ el [ Element.paddingXY 0 20 ] (text "Create a new game, then send the URL to your friends so they can join you.")
         , column [ Element.width Element.fill, Element.spacingXY 5 10 ]
             [ row [ Element.width Element.fill ]
                 [ Input.radioRow [ Element.spacing 10 ]
                     { onChange = ChangeNewGameSettingGridSize
-                    , selected = Just (gridSizeToString model.newGameSettings.gridSize)
+                    , selected = Just (gridSizeToString setting.gridSize)
                     , label =
                         Input.labelLeft
                             [ Element.paddingEach
@@ -886,7 +981,7 @@ viewCreateGameForm model user =
             , row [ Element.width Element.fill ]
                 [ Input.radioRow [ Element.spacing 10 ]
                     { onChange = ChangeNewGameSettingTeam
-                    , selected = Just (teamToString model.newGameSettings.startingTeam)
+                    , selected = Just (teamToString setting.startingTeam)
                     , label =
                         Input.labelLeft
                             [ Element.paddingEach
@@ -905,7 +1000,7 @@ viewCreateGameForm model user =
                 ]
             , row [ Element.width Element.fill ]
                 [ Input.button (viewButtonAttributes ++ [])
-                    { onPress = Just (CreatingNewGame user)
+                    { onPress = Just (CreatingNewGame user setting)
                     , label = text "Create Game"
                     }
                 ]

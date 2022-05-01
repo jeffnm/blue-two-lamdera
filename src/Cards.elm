@@ -1,4 +1,4 @@
-module Cards exposing (..)
+module Cards exposing (cardCardAlignmentToRgb, generateCards, generateWords, pickTeams, shuffleCardAlignments, shuffleWords, updateCard)
 
 import Element exposing (Color, rgb)
 import List.Extra

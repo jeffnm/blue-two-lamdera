@@ -7,21 +7,11 @@ import Time
 import Url exposing (Url)
 
 
-type alias FrontendModel =
-    { key : Key
-    , url : Url
-    , user : Maybe User
-    , activeGame : Maybe Game
-    , newGameSettings : NewGameSettings
-    , newUserSettings : NewUserSettings
-    }
-
-
-type PossibleFrontendModel
-    = Loading RoutingState
-    | NoUser RoutingState NewUserSettings
-    | NoGame RoutingState User NewGameSettings
-    | LoadedGame RoutingState User Game
+type FrontendModel
+    = LoadingPage RoutingState
+    | LandingPage RoutingState NewUserSettings
+    | LobbyPage RoutingState User NewGameSettings
+    | LoadedGamePage RoutingState User Game
 
 
 type alias RoutingState =
@@ -114,17 +104,17 @@ type FrontendMsg
     = UrlClicked UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
-    | NewUser
+    | NewUser NewUserSettings
     | ChangeNewUserSettingUsername String
     | ChangeNewUserSettingTeam String
-    | CreatingNewGame User
+    | CreatingNewGame User NewGameSettings
     | LeavingGame User Game
     | ChangeNewGameSettingGridSize String
     | ChangeNewGameSettingTeam String
     | RevealingCard Card Game User
     | EndingTurn Game
-    | ToggleClueGiverStatus User
-    | ToggleTeam User
+    | ToggleClueGiverStatus User Game
+    | ToggleTeam User (Maybe Game)
 
 
 type ToBackend
